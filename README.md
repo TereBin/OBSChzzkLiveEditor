@@ -47,6 +47,8 @@ OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하�
 - 배포 매니페스트 기반 운영 공지와 중요 알림창
 - 최소 지원 버전 미만 클라이언트에 대한 필수 업데이트 안내
 
+팔로우 브라우저 알림은 별도 프로젝트인 [OBS Chzzk Alerts](https://github.com/TereBin/obs-chzzk-alerts)에서 제공합니다. 두 플러그인은 서로 독립된 중계 서버를 사용하므로 함께 설치할 수 있습니다.
+
 ## 보안과 개인정보
 
 - 사용자의 Access Token과 Refresh Token은 Windows 사용자 계정에 묶인 DPAPI로 암호화되어 로컬에 저장됩니다.

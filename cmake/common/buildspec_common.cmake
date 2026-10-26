@@ -48,6 +48,15 @@ endfunction()
 
 # _setup_obs_studio: Create obs-studio build project, then build libobs and obs-frontend-api
 function(_setup_obs_studio)
+  set(_libobs_config "${libobs_DIR}/libobsConfig.cmake")
+  set(_frontend_api_config "${obs-frontend-api_DIR}/obs-frontend-apiConfig.cmake")
+
+  # Reuse a complete OBS development package when one is already installed.
+  if(EXISTS "${_libobs_config}" AND EXISTS "${_frontend_api_config}")
+    message(STATUS "Use existing OBS development package (${arch})")
+    return()
+  endif()
+
   if(NOT libobs_DIR)
     set(_is_fresh --fresh)
   endif()
@@ -148,8 +157,7 @@ function(_check_dependencies)
 
     if(EXISTS "${dependencies_dir}/.dependency_${dependency}_${arch}.sha256")
       file(
-        READ
-        "${dependencies_dir}/.dependency_${dependency}_${arch}.sha256"
+        READ "${dependencies_dir}/.dependency_${dependency}_${arch}.sha256"
         OBS_DEPENDENCY_${dependency}_${arch}_HASH
       )
     endif()
