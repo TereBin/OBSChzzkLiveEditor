@@ -13,6 +13,7 @@
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QStyle>
+#include <QTextBoundaryFinder>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -22,6 +23,23 @@ constexpr int kCategoryIdRole = Qt::UserRole + 2;
 constexpr int kCategorySearchDelayMs = 350;
 constexpr int kCompactLayoutWidth = 420;
 constexpr auto kDefaultReleaseUrl = "https://github.com/TereBin/obs-live-editor-releases/releases/latest";
+
+int graphemeCount(const QString &text)
+{
+	QTextBoundaryFinder finder(QTextBoundaryFinder::Grapheme, text);
+	int count = 0;
+	finder.toStart();
+	while (finder.toNextBoundary() != -1)
+		++count;
+	return count;
+}
+
+bool sameTags(QStringList left, QStringList right)
+{
+	left.sort(Qt::CaseSensitive);
+	right.sort(Qt::CaseSensitive);
+	return left == right;
+}
 } // namespace
 
 void CategoryLineEdit::inputMethodEvent(QInputMethodEvent *event)
@@ -50,6 +68,7 @@ void ChzzkDock::connectUi()
 {
 	connect(loginButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::beginLogin);
 	connect(logoutButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::logout);
+	connect(diagnosticsButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::runDiagnostics);
 	connect(refreshButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::loadSettings);
 	connect(applyButton_, &QPushButton::clicked, this, &ChzzkDock::applyChanges);
 	connect(clearCategoryButton_, &QPushButton::clicked, this, &ChzzkDock::clearCategory);
@@ -57,6 +76,7 @@ void ChzzkDock::connectUi()
 	connect(&client_, &ChzzkApiClient::userProfileLoaded, this, &ChzzkDock::showUserProfile);
 	connect(&client_, &ChzzkApiClient::settingsLoaded, this, &ChzzkDock::showSettings);
 	connect(&client_, &ChzzkApiClient::categoriesLoaded, this, &ChzzkDock::showCategories);
+	connect(&client_, &ChzzkApiClient::diagnosticsCompleted, this, &ChzzkDock::showDiagnostics);
 	connect(&client_, &ChzzkApiClient::operationSucceeded, this, &ChzzkDock::showSuccess);
 	connect(&client_, &ChzzkApiClient::operationFailed, this, &ChzzkDock::showError);
 	connect(&client_, &ChzzkApiClient::clientUpdateRequired, this,
@@ -106,7 +126,10 @@ void ChzzkDock::connectUi()
 		selectedCategoryType_ = categoryCombo_->itemData(index, kCategoryTypeRole).toString();
 		selectedCategoryId_ = categoryCombo_->itemData(index, kCategoryIdRole).toString();
 		removeCategory_ = false;
+		updateChangeSummary();
 	});
+	connect(titleEdit_, &QLineEdit::textChanged, this, &ChzzkDock::updateInputStatus);
+	connect(tagsEdit_, &QLineEdit::textChanged, this, &ChzzkDock::updateInputStatus);
 }
 
 void ChzzkDock::buildUi()
@@ -121,7 +144,11 @@ void ChzzkDock::buildUi()
 	statusLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	loginButton_ = new QPushButton(QStringLiteral("로그인"), this);
 	logoutButton_ = new QPushButton(QStringLiteral("로그아웃"), this);
+	diagnosticsButton_ = new QPushButton(QStringLiteral("진단"), this);
+	diagnosticsButton_->setIcon(style()->standardIcon(QStyle::SP_MessageBoxInformation));
+	diagnosticsButton_->setToolTip(QStringLiteral("Worker, TLS, 토큰, 치지직 API 연결 확인"));
 	accountLayout_->addWidget(statusLabel_);
+	accountLayout_->addWidget(diagnosticsButton_);
 	accountLayout_->addWidget(loginButton_);
 	accountLayout_->addWidget(logoutButton_);
 	root->addLayout(accountLayout_);
@@ -156,9 +183,15 @@ void ChzzkDock::buildUi()
 
 	formLayout_ = new QFormLayout();
 	formLayout_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+	auto *titleRow = new QHBoxLayout();
 	titleEdit_ = new QLineEdit(this);
 	titleEdit_->setPlaceholderText(QStringLiteral("방송 제목"));
-	formLayout_->addRow(QStringLiteral("제목"), titleEdit_);
+	titleCountLabel_ = new QLabel(QStringLiteral("0자"), this);
+	titleCountLabel_->setMinimumWidth(36);
+	titleCountLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+	titleRow->addWidget(titleEdit_, 1);
+	titleRow->addWidget(titleCountLabel_);
+	formLayout_->addRow(QStringLiteral("제목"), titleRow);
 
 	auto *categoryRow = new QHBoxLayout();
 	categoryCombo_ = new QComboBox(this);
@@ -177,10 +210,20 @@ void ChzzkDock::buildUi()
 	categoryRow->addWidget(clearCategoryButton_);
 	formLayout_->addRow(QStringLiteral("카테고리"), categoryRow);
 
+	auto *tagsColumn = new QVBoxLayout();
+	tagsColumn->setContentsMargins(0, 0, 0, 0);
+	tagsColumn->setSpacing(2);
 	tagsEdit_ = new QLineEdit(this);
 	tagsEdit_->setPlaceholderText(QStringLiteral("쉼표로 구분"));
-	formLayout_->addRow(QStringLiteral("태그"), tagsEdit_);
+	tagsValidationLabel_ = new QLabel(QStringLiteral("태그 없음 · 유효"), this);
+	tagsColumn->addWidget(tagsEdit_);
+	tagsColumn->addWidget(tagsValidationLabel_);
+	formLayout_->addRow(QStringLiteral("태그"), tagsColumn);
 	root->addLayout(formLayout_);
+
+	changeLabel_ = new QLabel(this);
+	changeLabel_->setWordWrap(true);
+	root->addWidget(changeLabel_);
 
 	messageLabel_ = new QLabel(this);
 	messageLabel_->setWordWrap(true);
@@ -200,6 +243,7 @@ void ChzzkDock::buildUi()
 	categoryTimer_ = new QTimer(this);
 	categoryTimer_->setSingleShot(true);
 	categoryTimer_->setInterval(kCategorySearchDelayMs);
+	updateInputStatus();
 	updateResponsiveLayout();
 }
 
@@ -212,6 +256,7 @@ void ChzzkDock::updateLoginState(bool loggedIn)
 								    : QStringLiteral("로그인 필요"));
 	loginButton_->setVisible(!loggedIn);
 	logoutButton_->setVisible(loggedIn);
+	diagnosticsButton_->setEnabled(!busy_);
 	updateControls();
 	if (!loggedIn) {
 		channelName_.clear();
@@ -219,7 +264,11 @@ void ChzzkDock::updateLoginState(bool loggedIn)
 		categoryCombo_->clear();
 		tagsEdit_->clear();
 		resetCategorySelection(false);
+		hasCurrentSettings_ = false;
+		hasPendingApply_ = false;
+		changeLabel_->clear();
 	}
+	updateInputStatus();
 }
 
 void ChzzkDock::showUserProfile(const QString &channelName)
@@ -234,12 +283,15 @@ void ChzzkDock::updateControls()
 	const bool canEdit = loggedIn_ && available;
 	loginButton_->setEnabled(!loggedIn_ && available);
 	logoutButton_->setEnabled(loggedIn_ && available);
+	diagnosticsButton_->setEnabled(!busy_ && !updateRequired_);
 	titleEdit_->setEnabled(canEdit);
 	categoryCombo_->setEnabled(canEdit);
 	clearCategoryButton_->setEnabled(canEdit);
 	tagsEdit_->setEnabled(canEdit);
 	refreshButton_->setEnabled(canEdit);
-	applyButton_->setEnabled(canEdit);
+	bool validTags = false;
+	validatedTags(validTags);
+	applyButton_->setEnabled(canEdit && !titleEdit_->text().trimmed().isEmpty() && validTags);
 }
 
 void ChzzkDock::scheduleCategorySearch()
@@ -256,10 +308,17 @@ void ChzzkDock::resetCategorySelection(bool removeCategory)
 	selectedCategoryId_.clear();
 	selectedCategoryType_.clear();
 	removeCategory_ = removeCategory;
+	updateChangeSummary();
 }
 
 void ChzzkDock::showSettings(const BroadcastSettings &settings, bool afterApply)
 {
+	const QString appliedSummary = hasPendingApply_ ? changeSummary(pendingSettings_, pendingRemoveCategory_, false)
+							: QString();
+	const bool verified = !afterApply ||
+			      (hasPendingApply_ && settingsMatch(pendingSettings_, pendingRemoveCategory_, settings));
+	currentSettings_ = settings;
+	hasCurrentSettings_ = true;
 	titleEdit_->setText(settings.title);
 	selectedCategoryId_ = settings.categoryId;
 	selectedCategoryType_ = settings.categoryType;
@@ -275,8 +334,16 @@ void ChzzkDock::showSettings(const BroadcastSettings &settings, bool afterApply)
 		}
 	}
 	tagsEdit_->setText(settings.tags.join(QStringLiteral(", ")));
-	showSuccess(afterApply ? QStringLiteral("방송 정보를 적용했습니다.")
-			       : QStringLiteral("방송 정보를 불러왔습니다."));
+	if (afterApply && verified)
+		showSuccess(appliedSummary.isEmpty() ? QStringLiteral("방송 정보를 적용하고 서버 값까지 확인했습니다.")
+						     : QStringLiteral("적용 및 확인 완료: %1").arg(appliedSummary));
+	else if (afterApply)
+		showError(QStringLiteral(
+			"요청은 처리됐지만 서버에서 확인한 값이 다릅니다. 현재 서버 값을 표시했습니다."));
+	else
+		showSuccess(QStringLiteral("방송 정보를 불러왔습니다."));
+	hasPendingApply_ = false;
+	updateInputStatus();
 }
 
 void ChzzkDock::resizeEvent(QResizeEvent *event)
@@ -346,6 +413,84 @@ QStringList ChzzkDock::validatedTags(bool &valid) const
 	return tags;
 }
 
+void ChzzkDock::updateInputStatus()
+{
+	titleCountLabel_->setText(QStringLiteral("%1자").arg(graphemeCount(titleEdit_->text())));
+	bool valid = false;
+	const QStringList tags = validatedTags(valid);
+	tagsValidationLabel_->setText(valid ? (tags.isEmpty() ? QStringLiteral("태그 없음 · 유효")
+							      : QStringLiteral("태그 %1개 · 유효").arg(tags.size()))
+					    : QStringLiteral("공백·특수문자는 사용할 수 없습니다."));
+	tagsValidationLabel_->setStyleSheet(valid ? QString() : QStringLiteral("color: #d94b4b;"));
+	updateChangeSummary();
+	updateControls();
+}
+
+QString ChzzkDock::changeSummary(const BroadcastSettings &settings, bool removeCategory, bool detailed) const
+{
+	if (!hasCurrentSettings_)
+		return {};
+	QStringList changes;
+	auto display = [](const QString &value) {
+		return value.isEmpty() ? QStringLiteral("(없음)") : value;
+	};
+	if (settings.title != currentSettings_.title)
+		changes.append(detailed ? QStringLiteral("제목: %1 → %2")
+						  .arg(display(currentSettings_.title), display(settings.title))
+					: QStringLiteral("제목"));
+	const QString categoryId = effectiveCategoryId(settings, removeCategory);
+	if (categoryId != currentSettings_.categoryId) {
+		const QString categoryName = removeCategory ? QString() : settings.categoryName;
+		changes.append(detailed ? QStringLiteral("카테고리: %1 → %2")
+						  .arg(display(currentSettings_.categoryName), display(categoryName))
+					: QStringLiteral("카테고리"));
+	}
+	if (!sameTags(settings.tags, currentSettings_.tags))
+		changes.append(detailed ? QStringLiteral("태그: %1 → %2")
+						  .arg(display(currentSettings_.tags.join(QStringLiteral(", "))),
+						       display(settings.tags.join(QStringLiteral(", "))))
+					: QStringLiteral("태그"));
+	return changes.join(detailed ? QStringLiteral("\n") : QStringLiteral(", "));
+}
+
+bool ChzzkDock::settingsMatch(const BroadcastSettings &expected, bool removeCategory,
+			      const BroadcastSettings &actual) const
+{
+	return expected.title == actual.title && effectiveCategoryId(expected, removeCategory) == actual.categoryId &&
+	       sameTags(expected.tags, actual.tags);
+}
+
+QString ChzzkDock::effectiveCategoryId(const BroadcastSettings &settings, bool removeCategory) const
+{
+	if (removeCategory)
+		return {};
+	return settings.categoryId.isEmpty() ? currentSettings_.categoryId : settings.categoryId;
+}
+
+BroadcastSettings ChzzkDock::editedSettings(bool &validTags) const
+{
+	BroadcastSettings settings;
+	settings.title = titleEdit_->text().trimmed();
+	settings.categoryId = selectedCategoryId_;
+	settings.categoryType = selectedCategoryType_;
+	settings.categoryName = categoryCombo_->currentText().trimmed();
+	settings.tags = validatedTags(validTags);
+	return settings;
+}
+
+void ChzzkDock::updateChangeSummary()
+{
+	if (!hasCurrentSettings_) {
+		changeLabel_->clear();
+		return;
+	}
+	bool validTags = false;
+	const BroadcastSettings edited = editedSettings(validTags);
+	const QString summary = validTags ? changeSummary(edited, removeCategory_, false) : QString();
+	changeLabel_->setText(summary.isEmpty() ? QStringLiteral("변경 사항 없음")
+						: QStringLiteral("변경 예정: %1").arg(summary));
+}
+
 void ChzzkDock::applyChanges()
 {
 	const QString title = titleEdit_->text().trimmed();
@@ -359,17 +504,25 @@ void ChzzkDock::applyChanges()
 	}
 
 	bool validTags = false;
-	const QStringList tags = validatedTags(validTags);
+	validatedTags(validTags);
 	if (!validTags) {
 		showError(QStringLiteral("태그에는 글자와 숫자만 사용할 수 있습니다."));
 		return;
 	}
 
-	BroadcastSettings settings;
-	settings.title = title;
-	settings.categoryType = selectedCategoryType_;
-	settings.categoryId = selectedCategoryId_;
-	settings.tags = tags;
+	BroadcastSettings settings = editedSettings(validTags);
+	const QString details = changeSummary(settings, removeCategory_, true);
+	if (details.isEmpty()) {
+		showSuccess(QStringLiteral("변경된 방송 정보가 없습니다."));
+		return;
+	}
+	if (QMessageBox::question(this, QStringLiteral("방송 정보 변경"),
+				  QStringLiteral("다음 내용을 적용할까요?\n\n%1").arg(details),
+				  QMessageBox::Apply | QMessageBox::Cancel, QMessageBox::Apply) != QMessageBox::Apply)
+		return;
+	pendingSettings_ = settings;
+	pendingRemoveCategory_ = removeCategory_;
+	hasPendingApply_ = true;
 	client_.updateSettings(settings, removeCategory_);
 }
 
@@ -380,6 +533,14 @@ void ChzzkDock::clearCategory()
 	categoryCombo_->clear();
 	resetCategorySelection(true);
 	showSuccess(QStringLiteral("적용하면 카테고리가 제거됩니다."));
+}
+
+void ChzzkDock::showDiagnostics(const QString &message, bool healthy)
+{
+	if (healthy)
+		showSuccess(QStringLiteral("연결 진단: %1").arg(message));
+	else
+		showError(QStringLiteral("연결 진단: %1").arg(message));
 }
 
 void ChzzkDock::showSuccess(const QString &message)

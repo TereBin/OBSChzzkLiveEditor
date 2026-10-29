@@ -50,11 +50,18 @@ Name: "{group}\OBS Studio"; Filename: "{code:GetObsPath}\bin\64bit\{#MyAppExeNam
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{code:GetObsPath}\bin\64bit\{#MyAppExeName}"; Description: "{cm:LaunchProgram,OBS Studio}"; WorkingDir: "{code:GetObsPath}\bin\64bit"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{code:GetObsPath}\bin\64bit\{#MyAppExeName}"; Description: "{cm:LaunchProgram,OBS Studio}"; WorkingDir: "{code:GetObsPath}\bin\64bit"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: IsInstallVerified
 
 [Code]
 var
   CachedObsPath: string;
+  ObsPathPage: TInputDirWizardPage;
+  InstallVerified: Boolean;
+
+function IsObsPath(const Path: string): Boolean;
+begin
+  Result := FileExists(AddBackslash(Path) + 'bin\64bit\{#MyAppExeName}');
+end;
 
 function DetectObsPath(): string;
 var
@@ -67,29 +74,69 @@ begin
       'UninstallString', UninstallCommand) then
   begin
     Candidate := ExtractFileDir(RemoveQuotes(UninstallCommand));
-    if FileExists(AddBackslash(Candidate) + 'bin\64bit\{#MyAppExeName}') then
+    if IsObsPath(Candidate) then
       Result := Candidate;
   end;
 
   if Result = '' then
   begin
     Candidate := ExpandConstant('{autopf}\obs-studio');
-    if FileExists(AddBackslash(Candidate) + 'bin\64bit\{#MyAppExeName}') then
+    if IsObsPath(Candidate) then
       Result := Candidate;
   end;
 end;
 
 function GetObsPath(Param: string): string;
 begin
+  if Assigned(ObsPathPage) and (ObsPathPage.Values[0] <> '') then
+    CachedObsPath := RemoveBackslashUnlessRoot(ObsPathPage.Values[0]);
   if CachedObsPath = '' then
     CachedObsPath := DetectObsPath();
   Result := CachedObsPath;
 end;
 
-function InitializeSetup(): Boolean;
+function IsInstallVerified(): Boolean;
 begin
-  CachedObsPath := DetectObsPath();
-  Result := CachedObsPath <> '';
-  if not Result then
-    MsgBox('64비트 OBS Studio 설치를 찾지 못했습니다. OBS를 먼저 설치해 주세요.', mbError, MB_OK);
+  Result := InstallVerified;
+end;
+
+procedure InitializeWizard();
+var
+  DetectedPath: string;
+begin
+  DetectedPath := DetectObsPath();
+  ObsPathPage := CreateInputDirPage(wpWelcome, 'OBS Studio 위치',
+    '64비트 OBS Studio가 설치된 폴더를 선택하세요.',
+    'bin, data, obs-plugins 폴더가 들어 있는 OBS Studio 최상위 폴더를 지정하세요.', False, '');
+  ObsPathPage.Add('');
+  ObsPathPage.Values[0] := DetectedPath;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID <> ObsPathPage.ID then
+    Exit;
+
+  CachedObsPath := RemoveBackslashUnlessRoot(ObsPathPage.Values[0]);
+  if not IsObsPath(CachedObsPath) then
+  begin
+    MsgBox('선택한 폴더에서 bin\64bit\obs64.exe를 찾지 못했습니다.'#13#10 +
+      '64비트 OBS Studio 최상위 폴더를 다시 선택해 주세요.', mbError, MB_OK);
+    Result := False;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep <> ssPostInstall then
+    Exit;
+
+  InstallVerified :=
+    FileExists(AddBackslash(CachedObsPath) + 'obs-plugins\64bit\obs-live-editor.dll') and
+    FileExists(AddBackslash(CachedObsPath) + 'bin\64bit\tls\qschannelbackend.dll') and
+    FileExists(AddBackslash(CachedObsPath) + 'data\obs-plugins\obs-live-editor\locale\ko-KR.ini');
+  if not InstallVerified then
+    MsgBox('설치 파일 검증에 실패했습니다. OBS Studio를 실행하기 전에 설치를 다시 시도해 주세요.',
+      mbError, MB_OK);
 end;

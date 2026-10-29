@@ -57,6 +57,15 @@ test("supported clients continue to OAuth", async () => {
   assert.equal(response.status, 200);
 });
 
+test("health reports configured worker availability", async () => {
+  const request = new Request("https://broker.example/health", {
+    headers: { "X-OBS-Live-Editor-Version": "0.2.0" },
+  });
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+});
+
 test("signed values round trip", async () => {
   const value = await createSignedValue({ purpose: "oauth-state", exp: Date.now() + 10_000 }, secret);
   const payload = await verifySignedValue(value, secret, "oauth-state");

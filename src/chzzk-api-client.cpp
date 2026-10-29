@@ -32,6 +32,15 @@ QString apiError(const QJsonObject &object, const QString &fallback)
 	return message.isEmpty() ? fallback : message;
 }
 
+bool isInvalidToken(const QJsonObject &object, const QNetworkReply *reply)
+{
+	const QString code = object.value(QStringLiteral("code")).toString();
+	const QString message = object.value(QStringLiteral("message")).toString();
+	const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+	return status == 401 || code == QStringLiteral("INVALID_TOKEN") ||
+	       message.contains(QStringLiteral("INVALID_TOKEN"), Qt::CaseInsensitive);
+}
+
 BroadcastSettings broadcastSettingsFrom(const QJsonObject &object)
 {
 	BroadcastSettings settings;
@@ -65,8 +74,7 @@ ChzzkApiClient::ChzzkApiClient(QObject *parent) : QObject(parent)
 	if (!tokenStore_.load(tokens_, loadError)) {
 		tokenStore_.clear();
 		if (!loadError.isEmpty())
-			QMetaObject::invokeMethod(
-				this, [this, loadError]() { fail(loadError); }, Qt::QueuedConnection);
+			QMetaObject::invokeMethod(this, [this, loadError]() { fail(loadError); }, Qt::QueuedConnection);
 	}
 
 	connect(&callbackServer_, &OAuthCallbackServer::callbackReceived, this,
@@ -82,8 +90,7 @@ ChzzkApiClient::ChzzkApiClient(QObject *parent) : QObject(parent)
 			exchangeAuthorizationCode(code, state);
 		});
 
-	QMetaObject::invokeMethod(
-		this, [this]() { emit loginStateChanged(isLoggedIn()); }, Qt::QueuedConnection);
+	QMetaObject::invokeMethod(this, [this]() { emit loginStateChanged(isLoggedIn()); }, Qt::QueuedConnection);
 }
 
 QUrl ChzzkApiClient::brokerUrl(const QString &path) const
@@ -256,6 +263,26 @@ void ChzzkApiClient::ensureAccessToken(TokenCallback callback)
 		refreshAccessToken();
 }
 
+void ChzzkApiClient::forceRefreshAccessToken(TokenCallback callback)
+{
+	if (tokens_.isEmpty()) {
+		fail(QStringLiteral("먼저 치지직에 로그인해 주세요."));
+		return;
+	}
+	pendingTokenCallbacks_.append(std::move(callback));
+	if (!refreshing_)
+		refreshAccessToken();
+}
+
+bool ChzzkApiClient::retryInvalidToken(const QJsonObject &response, QNetworkReply *reply, bool retried,
+				       RetryCallback callback)
+{
+	if (retried || !isInvalidToken(response, reply))
+		return false;
+	forceRefreshAccessToken([callback = std::move(callback)](const QString &) { callback(); });
+	return true;
+}
+
 void ChzzkApiClient::refreshAccessToken()
 {
 	refreshing_ = true;
@@ -297,15 +324,26 @@ void ChzzkApiClient::loadSettings()
 
 void ChzzkApiClient::loadUserProfile()
 {
-	ensureAccessToken([this](const QString &token) {
+	loadUserProfileInternal(false);
+}
+
+void ChzzkApiClient::loadUserProfileInternal(bool retried)
+{
+	ensureAccessToken([this, retried](const QString &token) {
 		QNetworkRequest request = authorizedRequest(apiUrl(QString::fromUtf8(kUserProfilePath)), token);
 		QNetworkReply *reply = network_.get(request);
-		connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+		connect(reply, &QNetworkReply::finished, this, [this, reply, retried]() {
 			QString error;
-			const QJsonObject object = unwrap(responseObject(reply, error));
+			const QJsonObject response = responseObject(reply, error);
+			const bool retry = !error.isEmpty() && retryInvalidToken(response, reply, retried, [this]() {
+				loadUserProfileInternal(true);
+			});
 			reply->deleteLater();
+			if (retry)
+				return;
 			if (!error.isEmpty())
 				return;
+			const QJsonObject object = unwrap(response);
 			const QString channelName = object.value(QStringLiteral("channelName")).toString().trimmed();
 			if (!channelName.isEmpty())
 				emit userProfileLoaded(channelName);
@@ -313,23 +351,81 @@ void ChzzkApiClient::loadUserProfile()
 	});
 }
 
-void ChzzkApiClient::loadSettingsInternal(bool afterApply)
+void ChzzkApiClient::loadSettingsInternal(bool afterApply, bool retried)
 {
-	ensureAccessToken([this, afterApply](const QString &token) {
+	ensureAccessToken([this, afterApply, retried](const QString &token) {
 		beginOperation();
 		QNetworkRequest request = authorizedRequest(apiUrl(QString::fromUtf8(kLiveSettingsPath)), token);
 		QNetworkReply *reply = network_.get(request);
-		connect(reply, &QNetworkReply::finished, this, [this, reply, afterApply]() {
+		connect(reply, &QNetworkReply::finished, this, [this, reply, afterApply, retried]() {
 			QString error;
-			const QJsonObject object = unwrap(responseObject(reply, error));
+			const QJsonObject response = responseObject(reply, error);
+			const bool retry = !error.isEmpty() &&
+					   retryInvalidToken(response, reply, retried, [this, afterApply]() {
+						   loadSettingsInternal(afterApply, true);
+					   });
 			reply->deleteLater();
 			endOperation();
+			if (retry)
+				return;
 			if (!error.isEmpty()) {
 				fail(QStringLiteral("방송 정보를 불러오지 못했습니다: %1").arg(error));
 				return;
 			}
 
-			emit settingsLoaded(broadcastSettingsFrom(object), afterApply);
+			emit settingsLoaded(broadcastSettingsFrom(unwrap(response)), afterApply);
+		});
+	});
+}
+
+void ChzzkApiClient::runDiagnostics()
+{
+	beginOperation();
+	QNetworkReply *reply = network_.get(brokerRequest(QStringLiteral("/health")));
+	connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+		QString error;
+		responseObject(reply, error);
+		reply->deleteLater();
+		endOperation();
+		if (!error.isEmpty()) {
+			emit diagnosticsCompleted(QStringLiteral("중계 Worker 또는 TLS 연결 실패: %1").arg(error),
+						  false);
+			return;
+		}
+		if (!isLoggedIn()) {
+			emit diagnosticsCompleted(
+				QStringLiteral("중계 Worker와 TLS는 정상입니다. 치지직 로그인은 필요합니다."), false);
+			return;
+		}
+		diagnoseAuthenticatedConnection(false);
+	});
+}
+
+void ChzzkApiClient::diagnoseAuthenticatedConnection(bool retried)
+{
+	ensureAccessToken([this, retried](const QString &token) {
+		beginOperation();
+		QNetworkReply *reply =
+			network_.get(authorizedRequest(apiUrl(QString::fromUtf8(kLiveSettingsPath)), token));
+		connect(reply, &QNetworkReply::finished, this, [this, reply, retried]() {
+			QString error;
+			const QJsonObject response = responseObject(reply, error);
+			const bool retry = !error.isEmpty() && retryInvalidToken(response, reply, retried, [this]() {
+				diagnoseAuthenticatedConnection(true);
+			});
+			reply->deleteLater();
+			endOperation();
+			if (retry)
+				return;
+			if (!error.isEmpty()) {
+				emit diagnosticsCompleted(
+					QStringLiteral("Worker와 TLS는 정상이나 치지직 인증에 실패했습니다: %1")
+						.arg(error),
+					false);
+				return;
+			}
+			emit diagnosticsCompleted(QStringLiteral("Worker, TLS, 토큰, 방송 설정 API 연결이 정상입니다."),
+						  true);
 		});
 	});
 }
@@ -370,7 +466,12 @@ void ChzzkApiClient::searchCategories(const QString &query)
 
 void ChzzkApiClient::updateSettings(const BroadcastSettings &settings, bool removeCategory)
 {
-	ensureAccessToken([this, settings, removeCategory](const QString &token) {
+	updateSettingsInternal(settings, removeCategory, false);
+}
+
+void ChzzkApiClient::updateSettingsInternal(const BroadcastSettings &settings, bool removeCategory, bool retried)
+{
+	ensureAccessToken([this, settings, removeCategory, retried](const QString &token) {
 		QJsonObject body{{QStringLiteral("defaultLiveTitle"), settings.title}};
 		QJsonArray tags;
 		for (const QString &tag : settings.tags)
@@ -387,16 +488,22 @@ void ChzzkApiClient::updateSettings(const BroadcastSettings &settings, bool remo
 		QNetworkRequest request = authorizedRequest(apiUrl(QString::fromUtf8(kLiveSettingsPath)), token);
 		QNetworkReply *reply = network_.sendCustomRequest(request, "PATCH",
 								  QJsonDocument(body).toJson(QJsonDocument::Compact));
-		connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+		connect(reply, &QNetworkReply::finished, this, [this, reply, settings, removeCategory, retried]() {
 			QString error;
-			responseObject(reply, error);
+			const QJsonObject response = responseObject(reply, error);
+			const bool retry =
+				!error.isEmpty() &&
+				retryInvalidToken(response, reply, retried, [this, settings, removeCategory]() {
+					updateSettingsInternal(settings, removeCategory, true);
+				});
 			reply->deleteLater();
 			endOperation();
+			if (retry)
+				return;
 			if (!error.isEmpty()) {
 				fail(QStringLiteral("방송 정보를 적용하지 못했습니다: %1").arg(error));
 				return;
 			}
-			emit operationSucceeded(QStringLiteral("방송 정보를 적용했습니다."));
 			loadSettingsInternal(true);
 		});
 	});

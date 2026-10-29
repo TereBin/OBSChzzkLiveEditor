@@ -232,11 +232,12 @@ export default {
     if (!config.CHZZK_CLIENT_ID || !config.CHZZK_CLIENT_SECRET || !config.CHZZK_REDIRECT_URI || !config.STATE_SECRET) {
       return json({ message: "Worker is not configured" }, 503);
     }
-    const supportedRoute = ["/oauth/start", "/oauth/token", "/oauth/revoke", "/categories"].includes(url.pathname);
+    const supportedRoute = ["/health", "/oauth/start", "/oauth/token", "/oauth/revoke", "/categories"].includes(url.pathname);
     if (supportedRoute) {
       const updateResponse = clientUpdateResponse(request, config);
       if (updateResponse) return updateResponse;
     }
+    if (request.method === "GET" && url.pathname === "/health") return json({ ok: true });
     if (request.method === "GET" && url.pathname === "/oauth/start") return startAuthorization(config);
     if (request.method === "POST" && url.pathname === "/oauth/token") return exchangeToken(request, config);
     if (request.method === "POST" && url.pathname === "/oauth/revoke") return revokeToken(request, config);

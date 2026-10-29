@@ -42,6 +42,7 @@ private slots:
 	void showUserProfile(const QString &channelName);
 	void showSettings(const BroadcastSettings &settings, bool afterApply);
 	void showCategories(const QString &query, const QVector<ChzzkCategory> &categories);
+	void showDiagnostics(const QString &message, bool healthy);
 	void applyChanges();
 	void clearCategory();
 	void showSuccess(const QString &message);
@@ -57,6 +58,13 @@ private:
 	void updateControls();
 	void scheduleCategorySearch();
 	void resetCategorySelection(bool removeCategory);
+	void updateInputStatus();
+	void updateChangeSummary();
+	BroadcastSettings editedSettings(bool &validTags) const;
+	QString effectiveCategoryId(const BroadcastSettings &settings, bool removeCategory) const;
+	QString changeSummary(const BroadcastSettings &settings, bool removeCategory, bool detailed) const;
+	bool settingsMatch(const BroadcastSettings &expected, bool removeCategory,
+			   const BroadcastSettings &actual) const;
 	void openUpdatePage();
 	QStringList validatedTags(bool &valid) const;
 
@@ -69,6 +77,9 @@ private:
 	QFormLayout *formLayout_ = nullptr;
 	QLabel *statusLabel_ = nullptr;
 	QLabel *messageLabel_ = nullptr;
+	QLabel *changeLabel_ = nullptr;
+	QLabel *titleCountLabel_ = nullptr;
+	QLabel *tagsValidationLabel_ = nullptr;
 	QWidget *updateBanner_ = nullptr;
 	QWidget *noticeBanner_ = nullptr;
 	QLabel *noticeLabel_ = nullptr;
@@ -79,6 +90,7 @@ private:
 	QPushButton *skipUpdateButton_ = nullptr;
 	QPushButton *loginButton_ = nullptr;
 	QPushButton *logoutButton_ = nullptr;
+	QPushButton *diagnosticsButton_ = nullptr;
 	QLineEdit *titleEdit_ = nullptr;
 	QComboBox *categoryCombo_ = nullptr;
 	CategoryLineEdit *categoryEdit_ = nullptr;
@@ -93,8 +105,13 @@ private:
 	UpdateInfo pendingUpdate_;
 	NoticeInfo pendingNotice_;
 	QString promptedUpdateVersion_;
+	BroadcastSettings currentSettings_;
+	BroadcastSettings pendingSettings_;
 	bool loggedIn_ = false;
 	bool busy_ = false;
 	bool updateRequired_ = false;
 	bool removeCategory_ = false;
+	bool hasCurrentSettings_ = false;
+	bool hasPendingApply_ = false;
+	bool pendingRemoveCategory_ = false;
 };

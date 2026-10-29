@@ -27,6 +27,7 @@ public:
 	void logout();
 	void loadUserProfile();
 	void loadSettings();
+	void runDiagnostics();
 	void searchCategories(const QString &query);
 	void updateSettings(const BroadcastSettings &settings, bool removeCategory);
 
@@ -36,6 +37,7 @@ signals:
 	void userProfileLoaded(const QString &channelName);
 	void settingsLoaded(const BroadcastSettings &settings, bool afterApply);
 	void categoriesLoaded(const QString &query, const QVector<ChzzkCategory> &categories);
+	void diagnosticsCompleted(const QString &message, bool healthy);
 	void operationSucceeded(const QString &message);
 	void operationFailed(const QString &message);
 	void clientUpdateRequired(const QString &latestVersion, const QString &minimumVersion, const QString &level,
@@ -43,6 +45,7 @@ signals:
 
 private:
 	using TokenCallback = std::function<void(const QString &)>;
+	using RetryCallback = std::function<void()>;
 
 	QUrl brokerUrl(const QString &path) const;
 	QUrl apiUrl(const QString &path) const;
@@ -52,10 +55,15 @@ private:
 	QJsonObject responseObject(QNetworkReply *reply, QString &error);
 	void exchangeAuthorizationCode(const QString &code, const QString &state);
 	void ensureAccessToken(TokenCallback callback);
+	void forceRefreshAccessToken(TokenCallback callback);
+	bool retryInvalidToken(const QJsonObject &response, QNetworkReply *reply, bool retried, RetryCallback callback);
 	void refreshAccessToken();
 	void finishTokenRequest(QNetworkReply *reply);
 	bool saveTokens(const QJsonObject &object);
-	void loadSettingsInternal(bool afterApply);
+	void loadUserProfileInternal(bool retried);
+	void loadSettingsInternal(bool afterApply, bool retried = false);
+	void updateSettingsInternal(const BroadcastSettings &settings, bool removeCategory, bool retried);
+	void diagnoseAuthenticatedConnection(bool retried);
 	void fail(const QString &message);
 	void beginOperation();
 	void endOperation();
