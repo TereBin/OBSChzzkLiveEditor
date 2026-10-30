@@ -1,7 +1,7 @@
 const CHZZK_API = "https://openapi.chzzk.naver.com";
 const CHZZK_AUTHORIZE = "https://chzzk.naver.com/account-interlock";
 const DEFAULT_CLIENT_VERSION = "0.1.0";
-const DEFAULT_RELEASE_URL = "https://github.com/TereBin/obs-live-editor-releases/releases/latest";
+const DEFAULT_RELEASE_URL = "https://github.com/TereBin/OBSChzzkLiveEditor-Releases/releases/latest";
 const encoder = new TextEncoder();
 
 function cleanEnvironmentValue(value) {

@@ -5,9 +5,9 @@
   "compatibility_date": "2026-09-01",
   "vars": {
     "MINIMUM_CLIENT_VERSION": "0.1.0",
-    "LATEST_CLIENT_VERSION": "0.3.4",
+    "LATEST_CLIENT_VERSION": "0.3.5",
     "CLIENT_UPDATE_LEVEL": "optional",
-    "CLIENT_UPDATE_MESSAGE": "프로그램 이름을 OBSChzzkLiveEditor로 변경하고 기존 설치에서 안전하게 전환되도록 개선했습니다.",
-    "CLIENT_RELEASE_URL": "https://github.com/TereBin/obs-live-editor-releases/releases/latest"
+    "CLIENT_UPDATE_MESSAGE": "GitHub 저장소 주소를 OBSChzzkLiveEditor 이름으로 통일했습니다.",
+    "CLIENT_RELEASE_URL": "https://github.com/TereBin/OBSChzzkLiveEditor-Releases/releases/latest"
   }
 }

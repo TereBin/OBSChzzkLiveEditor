@@ -22,7 +22,7 @@ constexpr int kCategoryTypeRole = Qt::UserRole + 1;
 constexpr int kCategoryIdRole = Qt::UserRole + 2;
 constexpr int kCategorySearchDelayMs = 350;
 constexpr int kCompactLayoutWidth = 420;
-constexpr auto kDefaultReleaseUrl = "https://github.com/TereBin/obs-live-editor-releases/releases/latest";
+constexpr auto kDefaultReleaseUrl = "https://github.com/TereBin/OBSChzzkLiveEditor-Releases/releases/latest";
 
 int graphemeCount(const QString &text)
 {

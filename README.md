@@ -4,7 +4,7 @@ OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하�
 
 ## 다운로드
 
-일반 사용자는 [배포 저장소](https://github.com/TereBin/obs-live-editor-releases)에서 최신 Windows 설치 파일을 내려받으세요. 이 저장소는 소스 코드와 개발 문서를 제공합니다.
+일반 사용자는 [배포 저장소](https://github.com/TereBin/OBSChzzkLiveEditor-Releases)에서 최신 Windows 설치 파일을 내려받으세요. 이 저장소는 소스 코드와 개발 문서를 제공합니다.
 
 ## 요구 사항
 

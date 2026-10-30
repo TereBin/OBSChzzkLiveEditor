@@ -15,8 +15,8 @@
 
 namespace {
 constexpr auto kManifestUrl =
-	"https://raw.githubusercontent.com/TereBin/obs-live-editor-releases/main/update-manifest.json";
-constexpr auto kDefaultReleaseUrl = "https://github.com/TereBin/obs-live-editor-releases/releases/latest";
+	"https://raw.githubusercontent.com/TereBin/OBSChzzkLiveEditor-Releases/main/update-manifest.json";
+constexpr auto kDefaultReleaseUrl = "https://github.com/TereBin/OBSChzzkLiveEditor-Releases/releases/latest";
 constexpr qint64 kCheckIntervalSeconds = 24 * 60 * 60;
 
 UpdateLevel updateLevelFrom(const QString &value)

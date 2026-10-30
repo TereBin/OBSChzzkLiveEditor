@@ -16,7 +16,7 @@ const env = {
   LATEST_CLIENT_VERSION: "0.2.0",
   CLIENT_UPDATE_LEVEL: "optional",
   CLIENT_UPDATE_MESSAGE: "A new version is available.",
-  CLIENT_RELEASE_URL: "https://github.com/TereBin/obs-live-editor-releases/releases/latest",
+  CLIENT_RELEASE_URL: "https://github.com/TereBin/OBSChzzkLiveEditor-Releases/releases/latest",
 };
 
 test("semantic versions compare by numeric components", () => {
