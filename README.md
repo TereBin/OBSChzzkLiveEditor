@@ -1,4 +1,4 @@
-# Live Editor for OBS
+# OBSChzzkLiveEditor
 
 OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하고 변경하는 Windows용 도크 플러그인입니다.
 
@@ -15,11 +15,11 @@ OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하�
 ## 설치
 
 1. OBS Studio를 종료합니다.
-2. 배포 저장소에서 `obs-live-editor-<버전>-windows-x64-setup.exe`를 내려받습니다.
+2. 배포 저장소에서 `OBSChzzkLiveEditor-<버전>-windows-x64-setup.exe`를 내려받습니다.
 3. 설치 파일에 표시된 OBS Studio 폴더를 확인하고, 필요하면 OBS 최상위 폴더를 직접 선택합니다.
 4. 관리자 권한 요청을 승인하고 설치를 완료합니다.
 5. OBS Studio를 실행합니다.
-6. `도크` 메뉴에서 `라이브 정보 편집`을 엽니다.
+6. `도크` 메뉴에서 `OBSChzzkLiveEditor`를 엽니다.
 
 현재 설치 파일은 코드 서명이 되어 있지 않아 Windows SmartScreen 경고가 나타날 수 있습니다. 배포 저장소에 공개된 SHA-256 체크섬과 파일 해시를 비교할 수 있습니다.
 
@@ -124,7 +124,7 @@ winget install --id JRSoftware.InnoSetup
 ./installer/Build-Installer.ps1 -Configuration RelWithDebInfo
 ```
 
-결과 파일은 `release/obs-live-editor-<버전>-windows-x64-setup.exe`입니다. GitHub Actions로 배포 파일을 만들려면 저장소 변수 `CHZZK_BROKER_URL`을 설정해야 합니다. Client Secret은 GitHub Actions에 필요하지 않으며 등록하지 않는 것을 권장합니다.
+결과 파일은 `release/OBSChzzkLiveEditor-<버전>-windows-x64-setup.exe`입니다. GitHub Actions로 배포 파일을 만들려면 저장소 변수 `CHZZK_BROKER_URL`을 설정해야 합니다. Client Secret은 GitHub Actions에 필요하지 않으며 등록하지 않는 것을 권장합니다.
 
 ## 테스트
 

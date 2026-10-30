@@ -6,7 +6,7 @@
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
-OBS_MODULE_AUTHOR("OBS Live Editor contributors")
+OBS_MODULE_AUTHOR("OBSChzzkLiveEditor contributors")
 
 namespace {
 constexpr const char *kDockId = "obs-live-editor-dock";
@@ -15,7 +15,7 @@ ChzzkDock *g_dock = nullptr;
 
 const char *obs_module_description(void)
 {
-	return "Edit live title, category, and tags from an OBS dock.";
+	return "Edit CHZZK live title, category, and tags from an OBS dock.";
 }
 
 bool obs_module_load(void)

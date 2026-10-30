@@ -2,14 +2,14 @@
   #define MyAppVersion "0.1.0"
 #endif
 #ifndef BuildRoot
-  #define BuildRoot "..\release\RelWithDebInfo\obs-live-editor"
+  #define BuildRoot "..\release\RelWithDebInfo\OBSChzzkLiveEditor"
 #endif
 #ifndef OutputRoot
   #define OutputRoot "..\release"
 #endif
 
-#define MyAppName "Live Editor for OBS"
-#define MyAppPublisher "OBS Live Editor contributors"
+#define MyAppName "OBSChzzkLiveEditor"
+#define MyAppPublisher "OBSChzzkLiveEditor contributors"
 #define MyAppExeName "obs64.exe"
 
 [Setup]
@@ -17,11 +17,11 @@ AppId={{39D4249E-A2FB-4DBE-90D2-891D70A55AA5}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\OBS Live Editor
+DefaultDirName={autopf}\OBSChzzkLiveEditor
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 OutputDir={#OutputRoot}
-OutputBaseFilename=obs-live-editor-{#MyAppVersion}-windows-x64-setup
+OutputBaseFilename=OBSChzzkLiveEditor-{#MyAppVersion}-windows-x64-setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -34,16 +34,20 @@ UninstallDisplayName={#MyAppName}
 VersionInfoVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription=OBS live information editor plugin installer
+VersionInfoDescription=OBS CHZZK live information editor plugin installer
 
 [Languages]
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#BuildRoot}\bin\64bit\obs-live-editor.dll"; DestDir: "{code:GetObsPath}\obs-plugins\64bit"; Flags: ignoreversion restartreplace uninsrestartdelete
+Source: "{#BuildRoot}\bin\64bit\OBSChzzkLiveEditor.dll"; DestDir: "{code:GetObsPath}\obs-plugins\64bit"; Flags: ignoreversion restartreplace uninsrestartdelete
 Source: "{#BuildRoot}\bin\64bit\tls\qschannelbackend.dll"; DestDir: "{code:GetObsPath}\bin\64bit\tls"; Flags: ignoreversion restartreplace uninsrestartdelete
-Source: "{#BuildRoot}\data\*"; DestDir: "{code:GetObsPath}\data\obs-plugins\obs-live-editor"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#BuildRoot}\data\*"; DestDir: "{code:GetObsPath}\data\obs-plugins\OBSChzzkLiveEditor"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+Type: files; Name: "{code:GetObsPath}\obs-plugins\64bit\obs-live-editor.dll"
+Type: filesandordirs; Name: "{code:GetObsPath}\data\obs-plugins\obs-live-editor"
 
 [Icons]
 Name: "{group}\OBS Studio"; Filename: "{code:GetObsPath}\bin\64bit\{#MyAppExeName}"; WorkingDir: "{code:GetObsPath}\bin\64bit"
@@ -133,9 +137,10 @@ begin
     Exit;
 
   InstallVerified :=
-    FileExists(AddBackslash(CachedObsPath) + 'obs-plugins\64bit\obs-live-editor.dll') and
+    FileExists(AddBackslash(CachedObsPath) + 'obs-plugins\64bit\OBSChzzkLiveEditor.dll') and
     FileExists(AddBackslash(CachedObsPath) + 'bin\64bit\tls\qschannelbackend.dll') and
-    FileExists(AddBackslash(CachedObsPath) + 'data\obs-plugins\obs-live-editor\locale\ko-KR.ini');
+    FileExists(AddBackslash(CachedObsPath) + 'data\obs-plugins\OBSChzzkLiveEditor\locale\ko-KR.ini') and
+    not FileExists(AddBackslash(CachedObsPath) + 'obs-plugins\64bit\obs-live-editor.dll');
   if not InstallVerified then
     MsgBox('설치 파일 검증에 실패했습니다. OBS Studio를 실행하기 전에 설치를 다시 시도해 주세요.',
       mbError, MB_OK);

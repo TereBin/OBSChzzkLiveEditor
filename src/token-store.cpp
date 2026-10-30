@@ -20,7 +20,7 @@ QByteArray protect(const QByteArray &plain, QString &error)
 #ifdef _WIN32
 	DATA_BLOB input{static_cast<DWORD>(plain.size()), reinterpret_cast<BYTE *>(const_cast<char *>(plain.data()))};
 	DATA_BLOB output{};
-	if (!CryptProtectData(&input, L"OBS Live Editor tokens", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN,
+	if (!CryptProtectData(&input, L"OBSChzzkLiveEditor tokens", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN,
 			      &output)) {
 		error = QStringLiteral("Windows에서 로그인 정보를 암호화하지 못했습니다. (%1)").arg(GetLastError());
 		return {};
@@ -64,9 +64,20 @@ QString TokenStore::storagePath() const
 	return result;
 }
 
+QString TokenStore::legacyStoragePath() const
+{
+	const QFileInfo current(storagePath());
+	QDir pluginConfigDirectory(current.absolutePath());
+	pluginConfigDirectory.cdUp();
+	return pluginConfigDirectory.filePath(QStringLiteral("obs-live-editor/credentials.bin"));
+}
+
 bool TokenStore::load(ChzzkTokens &tokens, QString &error) const
 {
-	QFile file(storagePath());
+	const QString currentPath = storagePath();
+	const QString legacyPath = legacyStoragePath();
+	const bool migratingLegacyStore = !QFile::exists(currentPath) && QFile::exists(legacyPath);
+	QFile file(migratingLegacyStore ? legacyPath : currentPath);
 	if (!file.exists())
 		return true;
 	if (!file.open(QIODevice::ReadOnly)) {
@@ -90,6 +101,11 @@ bool TokenStore::load(ChzzkTokens &tokens, QString &error) const
 	tokens.refreshToken = object.value(QStringLiteral("refreshToken")).toString();
 	tokens.brokerToken = object.value(QStringLiteral("brokerToken")).toString();
 	tokens.expiresAt = static_cast<qint64>(object.value(QStringLiteral("expiresAt")).toDouble());
+	if (migratingLegacyStore) {
+		QString migrationError;
+		if (save(tokens, migrationError))
+			QFile::remove(legacyPath);
+	}
 	return true;
 }
 
@@ -116,4 +132,5 @@ bool TokenStore::save(const ChzzkTokens &tokens, QString &error) const
 void TokenStore::clear() const
 {
 	QFile::remove(storagePath());
+	QFile::remove(legacyStoragePath());
 }

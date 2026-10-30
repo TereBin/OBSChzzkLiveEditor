@@ -12,4 +12,5 @@ public:
 
 private:
 	QString storagePath() const;
+	QString legacyStoragePath() const;
 };

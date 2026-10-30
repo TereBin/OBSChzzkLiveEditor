@@ -64,7 +64,7 @@ void UpdateChecker::checkForUpdates(bool force)
 	QNetworkRequest request(QUrl(QString::fromUtf8(kManifestUrl)));
 	request.setRawHeader("Accept", "application/json");
 	request.setRawHeader("Cache-Control", "no-cache");
-	request.setRawHeader("User-Agent", QByteArray("obs-live-editor/") + PLUGIN_VERSION);
+	request.setRawHeader("User-Agent", QByteArray("OBSChzzkLiveEditor/") + PLUGIN_VERSION);
 	request.setTransferTimeout(10000);
 	QNetworkReply *reply = network_.get(request);
 	connect(reply, &QNetworkReply::finished, this, [this, reply]() {

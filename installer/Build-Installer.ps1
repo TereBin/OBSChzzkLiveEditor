@@ -11,7 +11,7 @@ $BuildSpec = Get-Content -LiteralPath (Join-Path $ProjectRoot 'buildspec.json') 
 $BuildRoot = Join-Path $ProjectRoot "release\$Configuration\$($BuildSpec.name)"
 $OutputRoot = Join-Path $ProjectRoot 'release'
 
-if (-not (Test-Path -LiteralPath (Join-Path $BuildRoot 'bin\64bit\obs-live-editor.dll'))) {
+if (-not (Test-Path -LiteralPath (Join-Path $BuildRoot 'bin\64bit\OBSChzzkLiveEditor.dll'))) {
     throw "Built plugin was not found under $BuildRoot. Run the CMake install step first."
 }
 
@@ -33,5 +33,5 @@ if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE."
 }
 
-$Installer = Join-Path $OutputRoot "obs-live-editor-$($BuildSpec.version)-windows-x64-setup.exe"
+$Installer = Join-Path $OutputRoot "OBSChzzkLiveEditor-$($BuildSpec.version)-windows-x64-setup.exe"
 Write-Output $Installer

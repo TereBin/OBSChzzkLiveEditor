@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-echo Live Editor for OBS - Worker configuration
+echo OBSChzzkLiveEditor - Worker configuration
 echo.
 set /p "WORKER_URL=Worker URL (https://YOUR-WORKER.workers.dev): "
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0Configure-Secrets.ps1" -WorkerUrl "%WORKER_URL%"
