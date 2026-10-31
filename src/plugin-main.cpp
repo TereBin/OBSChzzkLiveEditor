@@ -4,13 +4,15 @@
 #include <obs-module.h>
 #include <plugin-support.h>
 
+#include <QPointer>
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 OBS_MODULE_AUTHOR("OBSChzzkLiveEditor contributors")
 
 namespace {
 constexpr const char *kDockId = "obs-live-editor-dock";
-ChzzkDock *g_dock = nullptr;
+QPointer<ChzzkDock> g_dock;
 } // namespace
 
 const char *obs_module_description(void)
@@ -34,8 +36,10 @@ bool obs_module_load(void)
 
 void obs_module_unload(void)
 {
-	obs_frontend_remove_dock(kDockId);
-	delete g_dock;
-	g_dock = nullptr;
+	// OBS owns the wrapper dock and its child widget after registration.
+	// Removing the dock destroys ChzzkDock; deleting it again corrupts the heap.
+	if (g_dock)
+		obs_frontend_remove_dock(kDockId);
+	g_dock.clear();
 	obs_log(LOG_INFO, "plugin unloaded");
 }
