@@ -35,19 +35,26 @@ VersionInfoVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription=OBS CHZZK live information editor plugin installer
+#ifdef SignInstaller
+SignTool=obs-chzzk-sign
+SignedUninstaller=yes
+#endif
 
 [Languages]
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#BuildRoot}\bin\64bit\OBSChzzkLiveEditor.dll"; DestDir: "{code:GetObsPath}\obs-plugins\64bit"; Flags: ignoreversion restartreplace uninsrestartdelete
-Source: "{#BuildRoot}\bin\64bit\tls\qschannelbackend.dll"; DestDir: "{code:GetObsPath}\bin\64bit\tls"; Flags: ignoreversion restartreplace uninsrestartdelete
-Source: "{#BuildRoot}\data\*"; DestDir: "{code:GetObsPath}\data\obs-plugins\OBSChzzkLiveEditor"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#BuildRoot}\OBSChzzkLiveEditor.dll"; DestDir: "{code:GetPluginRoot}"; Flags: ignoreversion restartreplace uninsrestartdelete
+Source: "{#BuildRoot}\tls\qschannelbackend.dll"; DestDir: "{code:GetPluginRoot}\tls"; Flags: ignoreversion restartreplace uninsrestartdelete
+Source: "{#BuildRoot}\data\*"; DestDir: "{code:GetPluginRoot}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [InstallDelete]
 Type: files; Name: "{code:GetObsPath}\obs-plugins\64bit\obs-live-editor.dll"
+Type: files; Name: "{code:GetObsPath}\obs-plugins\64bit\OBSChzzkLiveEditor.dll"
 Type: filesandordirs; Name: "{code:GetObsPath}\data\obs-plugins\obs-live-editor"
+Type: filesandordirs; Name: "{code:GetObsPath}\data\obs-plugins\OBSChzzkLiveEditor"
+Type: filesandordirs; Name: "{commonappdata}\obs-studio\plugins\OBSChzzkLiveEditor\bin"
 
 [Icons]
 Name: "{group}\OBS Studio"; Filename: "{code:GetObsPath}\bin\64bit\{#MyAppExeName}"; WorkingDir: "{code:GetObsPath}\bin\64bit"
@@ -60,6 +67,7 @@ Filename: "{code:GetObsPath}\bin\64bit\{#MyAppExeName}"; Description: "{cm:Launc
 var
   CachedObsPath: string;
   ObsPathPage: TInputDirWizardPage;
+  PortableCheckBox: TNewCheckBox;
   InstallVerified: Boolean;
 
 function IsObsPath(const Path: string): Boolean;
@@ -99,6 +107,14 @@ begin
   Result := CachedObsPath;
 end;
 
+function GetPluginRoot(Param: string): string;
+begin
+  if Assigned(PortableCheckBox) and PortableCheckBox.Checked then
+    Result := AddBackslash(GetObsPath('')) + 'plugins\OBSChzzkLiveEditor'
+  else
+    Result := ExpandConstant('{commonappdata}\obs-studio\plugins\OBSChzzkLiveEditor');
+end;
+
 function IsInstallVerified(): Boolean;
 begin
   Result := InstallVerified;
@@ -114,6 +130,12 @@ begin
     'bin, data, obs-plugins 폴더가 들어 있는 OBS Studio 최상위 폴더를 지정하세요.', False, '');
   ObsPathPage.Add('');
   ObsPathPage.Values[0] := DetectedPath;
+  PortableCheckBox := TNewCheckBox.Create(ObsPathPage);
+  PortableCheckBox.Parent := ObsPathPage.Surface;
+  PortableCheckBox.Top := ObsPathPage.Edits[0].Top + ObsPathPage.Edits[0].Height + ScaleY(16);
+  PortableCheckBox.Left := 0;
+  PortableCheckBox.Width := ObsPathPage.SurfaceWidth;
+  PortableCheckBox.Caption := '포터블 OBS의 plugins 폴더에 설치';
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -137,9 +159,9 @@ begin
     Exit;
 
   InstallVerified :=
-    FileExists(AddBackslash(CachedObsPath) + 'obs-plugins\64bit\OBSChzzkLiveEditor.dll') and
-    FileExists(AddBackslash(CachedObsPath) + 'bin\64bit\tls\qschannelbackend.dll') and
-    FileExists(AddBackslash(CachedObsPath) + 'data\obs-plugins\OBSChzzkLiveEditor\locale\ko-KR.ini') and
+    FileExists(AddBackslash(GetPluginRoot('')) + 'OBSChzzkLiveEditor.dll') and
+    FileExists(AddBackslash(GetPluginRoot('')) + 'tls\qschannelbackend.dll') and
+    FileExists(AddBackslash(GetPluginRoot('')) + 'data\locale\ko-KR.ini') and
     not FileExists(AddBackslash(CachedObsPath) + 'obs-plugins\64bit\obs-live-editor.dll');
   if not InstallVerified then
     MsgBox('설치 파일 검증에 실패했습니다. OBS Studio를 실행하기 전에 설치를 다시 시도해 주세요.',

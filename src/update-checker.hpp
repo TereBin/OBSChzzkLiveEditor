@@ -20,6 +20,7 @@ public:
 signals:
 	void updateAvailable(const UpdateInfo &info);
 	void noticeAvailable(const NoticeInfo &info);
+	void checkCompleted(const QString &message, bool healthy);
 
 private:
 	QString settingsPath() const;

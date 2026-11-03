@@ -53,21 +53,44 @@ target_sources(
     src/chzzk-dock.hpp
     src/oauth-callback-server.cpp
     src/oauth-callback-server.hpp
+    src/network-error.cpp
+    src/network-error.hpp
     src/plugin-main.cpp
+    src/settings-utils.cpp
+    src/settings-utils.hpp
     src/token-store.cpp
     src/token-store.hpp
     src/update-checker.cpp
     src/update-checker.hpp
     src/update-info.hpp
+    src/update-utils.cpp
+    src/update-utils.hpp
 )
 
 if(WIN32)
   target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Crypt32)
   if(TARGET Qt6::QSchannelBackendPlugin)
-    install(FILES "$<TARGET_FILE:Qt6::QSchannelBackendPlugin>" DESTINATION "${CMAKE_PROJECT_NAME}/bin/64bit/tls")
+    install(FILES "$<TARGET_FILE:Qt6::QSchannelBackendPlugin>" DESTINATION "${CMAKE_PROJECT_NAME}/tls")
   else()
     message(FATAL_ERROR "Qt Schannel TLS backend was not found")
   endif()
 endif()
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(logic-tests tests/logic-tests.cpp src/network-error.cpp src/settings-utils.cpp src/update-utils.cpp)
+  target_include_directories(logic-tests PRIVATE src)
+  target_link_libraries(logic-tests PRIVATE Qt6::Core Qt6::Network)
+  target_compile_features(logic-tests PRIVATE cxx_std_17)
+  if(WIN32)
+    add_custom_command(
+      TARGET logic-tests
+      POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:Qt6::Core>" "$<TARGET_FILE_DIR:logic-tests>"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:Qt6::Network>" "$<TARGET_FILE_DIR:logic-tests>"
+    )
+  endif()
+  add_test(NAME logic-tests COMMAND logic-tests)
+endif()

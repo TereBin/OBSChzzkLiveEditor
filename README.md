@@ -9,19 +9,19 @@ OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하�
 ## 요구 사항
 
 - Windows 10 또는 Windows 11 64비트
-- OBS Studio 64비트
+- OBS Studio 33.0.0 이상 64비트
 - 치지직 스트리머 계정
 
 ## 설치
 
 1. OBS Studio를 종료합니다.
 2. 배포 저장소에서 `OBSChzzkLiveEditor-<버전>-windows-x64-setup.exe`를 내려받습니다.
-3. 설치 파일에 표시된 OBS Studio 폴더를 확인하고, 필요하면 OBS 최상위 폴더를 직접 선택합니다.
+3. 설치 파일에 표시된 OBS Studio 폴더를 확인합니다. 포터블 OBS에 설치할 때만 포터블 설치 옵션을 선택합니다.
 4. 관리자 권한 요청을 승인하고 설치를 완료합니다.
 5. OBS Studio를 실행합니다.
 6. `도크` 메뉴에서 `OBSChzzkLiveEditor`를 엽니다.
 
-현재 설치 파일은 코드 서명이 되어 있지 않아 Windows SmartScreen 경고가 나타날 수 있습니다. 배포 저장소에 공개된 SHA-256 체크섬과 파일 해시를 비교할 수 있습니다.
+플러그인은 OBS 33부터 권장되는 `%ProgramData%\obs-studio\plugins\OBSChzzkLiveEditor` 새 형식에 설치됩니다. 기존 Program Files의 레거시 설치 파일은 업데이트 과정에서 정리됩니다. 현재 설치 파일은 코드 서명이 되어 있지 않아 Windows SmartScreen 경고가 나타날 수 있으며, 배포 저장소의 SHA-256 체크섬과 비교할 수 있습니다.
 
 ## 사용
 
@@ -41,9 +41,11 @@ OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하�
 - 태그 조회, 변경 및 전체 제거
 - OAuth 로그인과 Access Token 자동 갱신
 - 현재 로그인한 치지직 채널명 표시
-- Worker, TLS, 토큰, 방송 설정 API 연결 진단
+- Worker, TLS, 토큰, 방송 설정 API와 업데이트 서버 연결 진단
 - `INVALID_TOKEN` 발생 시 토큰 갱신 후 요청 1회 자동 복구
 - 방송 정보 변경 전 비교와 적용 후 서버 값 검증
+- 미적용 변경 사항이 있을 때 새로고침, 로그아웃 및 도크 닫기 전 확인
+- 치지직 API 요청 제한 시 `Retry-After`에 따른 1회 자동 재시도
 - 제목 글자 수와 태그 유효성 실시간 표시
 - 도크 너비에 맞춘 반응형 레이아웃
 - Windows DPAPI를 이용한 로컬 토큰 암호화
@@ -52,7 +54,8 @@ OBS Studio 안에서 치지직 방송 제목, 카테고리, 태그를 조회하�
 - GitHub Releases 기반 업데이트 확인과 중요도별 알림
 - 배포 매니페스트 기반 운영 공지와 중요 알림창
 - 최소 지원 버전 미만 클라이언트에 대한 필수 업데이트 안내
-- 사용자 지정 OBS 설치 경로 선택과 설치 결과 검증
+- OBS 33 새 플러그인 구조, 포터블 OBS 선택 설치와 설치 결과 검증
+- 한국어 및 영어 OBS UI 지원
 
 팔로우 브라우저 알림은 별도 프로젝트인 [OBS Chzzk Alerts](https://github.com/TereBin/obs-chzzk-alerts)에서 제공합니다. 두 플러그인은 서로 독립된 중계 서버를 사용하므로 함께 설치할 수 있습니다.
 
@@ -126,11 +129,14 @@ winget install --id JRSoftware.InnoSetup
 
 결과 파일은 `release/OBSChzzkLiveEditor-<버전>-windows-x64-setup.exe`입니다. GitHub Actions로 배포 파일을 만들려면 저장소 변수 `CHZZK_BROKER_URL`을 설정해야 합니다. Client Secret은 GitHub Actions에 필요하지 않으며 등록하지 않는 것을 권장합니다.
 
+코드 서명 인증서가 있다면 Inno Setup SignTool 명령을 `OBS_CHZZK_SIGNTOOL` 환경 변수로 전달할 수 있습니다. 명령에는 Inno Setup이 제공하는 `$f` 파일 자리표시자를 포함해야 하며, 설치 파일과 제거 프로그램이 함께 서명됩니다.
+
 ## 테스트
 
-Worker 테스트는 Node.js 22 이상에서 실행할 수 있습니다.
+플러그인 핵심 로직과 Worker 테스트를 각각 실행할 수 있습니다.
 
 ```powershell
+ctest --test-dir build_x64 -C RelWithDebInfo --output-on-failure
 node --test worker/test/oauth.test.mjs
 ```
 

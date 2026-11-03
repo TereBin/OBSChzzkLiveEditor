@@ -1,4 +1,5 @@
 #include "chzzk-api-client.hpp"
+#include "network-error.hpp"
 
 #include <plugin-support.h>
 
@@ -9,6 +10,7 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QUrlQuery>
 
 #include <utility>
@@ -24,12 +26,6 @@ QJsonObject unwrap(const QJsonObject &object)
 {
 	const QJsonValue content = object.value(QStringLiteral("content"));
 	return content.isObject() ? content.toObject() : object;
-}
-
-QString apiError(const QJsonObject &object, const QString &fallback)
-{
-	const QString message = object.value(QStringLiteral("message")).toString();
-	return message.isEmpty() ? fallback : message;
 }
 
 bool isInvalidToken(const QJsonObject &object, const QNetworkReply *reply)
@@ -145,7 +141,9 @@ QJsonObject ChzzkApiClient::responseObject(QNetworkReply *reply, QString &error)
 					  QUrl(object.value(QStringLiteral("releaseUrl")).toString()));
 	}
 	if (reply->error() != QNetworkReply::NoError) {
-		error = apiError(object, reply->errorString());
+		const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		error = friendlyNetworkError(reply->error(), status,
+					     object.value(QStringLiteral("message")).toString(), reply->errorString());
 		return object;
 	}
 	if (parseError.error != QJsonParseError::NoError && !body.trimmed().isEmpty())
@@ -283,6 +281,29 @@ bool ChzzkApiClient::retryInvalidToken(const QJsonObject &response, QNetworkRepl
 	return true;
 }
 
+bool ChzzkApiClient::retryRateLimited(QNetworkReply *reply, bool retried, RetryCallback callback)
+{
+	if (retried || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 429)
+		return false;
+	bool ok = false;
+	int seconds = reply->rawHeader("Retry-After").toInt(&ok);
+	if (!ok)
+		seconds = 2;
+	seconds = qBound(1, seconds, 15);
+	QTimer::singleShot(seconds * 1000, this, [callback = std::move(callback)]() { callback(); });
+	return true;
+}
+
+bool ChzzkApiClient::retryRecoverable(const QJsonObject &response, QNetworkReply *reply, bool retried,
+				      RetryCallback callback)
+{
+	if (retried)
+		return false;
+	if (isInvalidToken(response, reply))
+		return retryInvalidToken(response, reply, false, std::move(callback));
+	return retryRateLimited(reply, false, std::move(callback));
+}
+
 void ChzzkApiClient::refreshAccessToken()
 {
 	refreshing_ = true;
@@ -335,9 +356,8 @@ void ChzzkApiClient::loadUserProfileInternal(bool retried)
 		connect(reply, &QNetworkReply::finished, this, [this, reply, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() && retryInvalidToken(response, reply, retried, [this]() {
-				loadUserProfileInternal(true);
-			});
+			const bool retry = !error.isEmpty() && retryRecoverable(
+				response, reply, retried, [this]() { loadUserProfileInternal(true); });
 			reply->deleteLater();
 			if (retry)
 				return;
@@ -360,10 +380,9 @@ void ChzzkApiClient::loadSettingsInternal(bool afterApply, bool retried)
 		connect(reply, &QNetworkReply::finished, this, [this, reply, afterApply, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() &&
-					   retryInvalidToken(response, reply, retried, [this, afterApply]() {
-						   loadSettingsInternal(afterApply, true);
-					   });
+			const bool retry = !error.isEmpty() && retryRecoverable(response, reply, retried, [this, afterApply]() {
+				loadSettingsInternal(afterApply, true);
+			});
 			reply->deleteLater();
 			endOperation();
 			if (retry)
@@ -410,9 +429,8 @@ void ChzzkApiClient::diagnoseAuthenticatedConnection(bool retried)
 		connect(reply, &QNetworkReply::finished, this, [this, reply, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() && retryInvalidToken(response, reply, retried, [this]() {
-				diagnoseAuthenticatedConnection(true);
-			});
+			const bool retry = !error.isEmpty() && retryRecoverable(
+				response, reply, retried, [this]() { diagnoseAuthenticatedConnection(true); });
 			reply->deleteLater();
 			endOperation();
 			if (retry)
@@ -491,11 +509,10 @@ void ChzzkApiClient::updateSettingsInternal(const BroadcastSettings &settings, b
 		connect(reply, &QNetworkReply::finished, this, [this, reply, settings, removeCategory, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry =
-				!error.isEmpty() &&
-				retryInvalidToken(response, reply, retried, [this, settings, removeCategory]() {
-					updateSettingsInternal(settings, removeCategory, true);
-				});
+			const bool retry = !error.isEmpty() &&
+					   retryRecoverable(response, reply, retried, [this, settings, removeCategory]() {
+						   updateSettingsInternal(settings, removeCategory, true);
+					   });
 			reply->deleteLater();
 			endOperation();
 			if (retry)

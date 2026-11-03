@@ -2,7 +2,8 @@
 param(
     [ValidateSet('Debug', 'RelWithDebInfo', 'Release', 'MinSizeRel')]
     [string] $Configuration = 'RelWithDebInfo',
-    [string] $IsccPath = ''
+    [string] $IsccPath = '',
+    [string] $SignTool = $env:OBS_CHZZK_SIGNTOOL
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,7 +12,7 @@ $BuildSpec = Get-Content -LiteralPath (Join-Path $ProjectRoot 'buildspec.json') 
 $BuildRoot = Join-Path $ProjectRoot "release\$Configuration\$($BuildSpec.name)"
 $OutputRoot = Join-Path $ProjectRoot 'release'
 
-if (-not (Test-Path -LiteralPath (Join-Path $BuildRoot 'bin\64bit\OBSChzzkLiveEditor.dll'))) {
+if (-not (Test-Path -LiteralPath (Join-Path $BuildRoot 'OBSChzzkLiveEditor.dll'))) {
     throw "Built plugin was not found under $BuildRoot. Run the CMake install step first."
 }
 
@@ -28,7 +29,17 @@ if (-not $IsccPath -or -not (Test-Path -LiteralPath $IsccPath)) {
 }
 
 $IssPath = Join-Path $PSScriptRoot 'obs-live-editor.iss'
-& $IsccPath "/DMyAppVersion=$($BuildSpec.version)" "/DBuildRoot=$BuildRoot" "/DOutputRoot=$OutputRoot" $IssPath
+$CompilerArgs = @(
+    "/DMyAppVersion=$($BuildSpec.version)",
+    "/DBuildRoot=$BuildRoot",
+    "/DOutputRoot=$OutputRoot"
+)
+if ($SignTool) {
+    $CompilerArgs += "/Sobs-chzzk-sign=$SignTool"
+    $CompilerArgs += '/DSignInstaller=1'
+}
+$CompilerArgs += $IssPath
+& $IsccPath @CompilerArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup failed with exit code $LASTEXITCODE."
 }

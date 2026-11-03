@@ -1,6 +1,9 @@
 #include "chzzk-dock.hpp"
+#include "settings-utils.hpp"
 
+#include <QCloseEvent>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -9,13 +12,12 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QStyle>
-#include <QTextBoundaryFinder>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <obs-module.h>
 
 namespace {
 constexpr int kCategoryTypeRole = Qt::UserRole + 1;
@@ -24,22 +26,11 @@ constexpr int kCategorySearchDelayMs = 350;
 constexpr int kCompactLayoutWidth = 420;
 constexpr auto kDefaultReleaseUrl = "https://github.com/TereBin/OBSChzzkLiveEditor-Releases/releases/latest";
 
-int graphemeCount(const QString &text)
+QString localeText(const char *key)
 {
-	QTextBoundaryFinder finder(QTextBoundaryFinder::Grapheme, text);
-	int count = 0;
-	finder.toStart();
-	while (finder.toNextBoundary() != -1)
-		++count;
-	return count;
+	return QString::fromUtf8(obs_module_text(key));
 }
 
-bool sameTags(QStringList left, QStringList right)
-{
-	left.sort(Qt::CaseSensitive);
-	right.sort(Qt::CaseSensitive);
-	return left == right;
-}
 } // namespace
 
 void CategoryLineEdit::inputMethodEvent(QInputMethodEvent *event)
@@ -67,9 +58,18 @@ ChzzkDock::ChzzkDock(QWidget *parent) : QWidget(parent), client_(this), updateCh
 void ChzzkDock::connectUi()
 {
 	connect(loginButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::beginLogin);
-	connect(logoutButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::logout);
-	connect(diagnosticsButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::runDiagnostics);
-	connect(refreshButton_, &QPushButton::clicked, &client_, &ChzzkApiClient::loadSettings);
+	connect(logoutButton_, &QPushButton::clicked, this, [this]() {
+		if (confirmDiscardChanges(QStringLiteral("로그아웃")))
+			client_.logout();
+	});
+	connect(diagnosticsButton_, &QPushButton::clicked, this, [this]() {
+		client_.runDiagnostics();
+		updateChecker_.checkForUpdates(true);
+	});
+	connect(refreshButton_, &QPushButton::clicked, this, [this]() {
+		if (confirmDiscardChanges(QStringLiteral("새로고침")))
+			client_.loadSettings();
+	});
 	connect(applyButton_, &QPushButton::clicked, this, &ChzzkDock::applyChanges);
 	connect(clearCategoryButton_, &QPushButton::clicked, this, &ChzzkDock::clearCategory);
 	connect(&client_, &ChzzkApiClient::loginStateChanged, this, &ChzzkDock::updateLoginState);
@@ -93,6 +93,10 @@ void ChzzkDock::connectUi()
 		});
 	connect(&updateChecker_, &UpdateChecker::updateAvailable, this, &ChzzkDock::showUpdate);
 	connect(&updateChecker_, &UpdateChecker::noticeAvailable, this, &ChzzkDock::showNotice);
+	connect(&updateChecker_, &UpdateChecker::checkCompleted, this, [this](const QString &message, bool healthy) {
+		if (!healthy)
+			showError(QStringLiteral("연결 진단: %1").arg(message));
+	});
 	connect(downloadUpdateButton_, &QPushButton::clicked, this, &ChzzkDock::openUpdatePage);
 	connect(skipUpdateButton_, &QPushButton::clicked, this, [this]() {
 		updateChecker_.skipVersion(pendingUpdate_.latestVersion);
@@ -142,11 +146,11 @@ void ChzzkDock::buildUi()
 	accountLayout_ = new QHBoxLayout();
 	statusLabel_ = new QLabel(this);
 	statusLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-	loginButton_ = new QPushButton(QStringLiteral("로그인"), this);
-	logoutButton_ = new QPushButton(QStringLiteral("로그아웃"), this);
-	diagnosticsButton_ = new QPushButton(QStringLiteral("진단"), this);
+	loginButton_ = new QPushButton(localeText("Button.Login"), this);
+	logoutButton_ = new QPushButton(localeText("Button.Logout"), this);
+	diagnosticsButton_ = new QPushButton(localeText("Button.Diagnostics"), this);
 	diagnosticsButton_->setIcon(style()->standardIcon(QStyle::SP_MessageBoxInformation));
-	diagnosticsButton_->setToolTip(QStringLiteral("Worker, TLS, 토큰, 치지직 API 연결 확인"));
+	diagnosticsButton_->setToolTip(localeText("Tooltip.Diagnostics"));
 	accountLayout_->addWidget(statusLabel_);
 	accountLayout_->addWidget(diagnosticsButton_);
 	accountLayout_->addWidget(loginButton_);
@@ -159,8 +163,8 @@ void ChzzkDock::buildUi()
 	noticeLabel_ = new QLabel(noticeBanner_);
 	noticeLabel_->setWordWrap(true);
 	noticeLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-	openNoticeButton_ = new QPushButton(QStringLiteral("자세히"), noticeBanner_);
-	dismissNoticeButton_ = new QPushButton(QStringLiteral("확인"), noticeBanner_);
+	openNoticeButton_ = new QPushButton(localeText("Button.Details"), noticeBanner_);
+	dismissNoticeButton_ = new QPushButton(localeText("Button.Confirm"), noticeBanner_);
 	noticeLayout_->addWidget(noticeLabel_, 1);
 	noticeLayout_->addWidget(openNoticeButton_);
 	noticeLayout_->addWidget(dismissNoticeButton_);
@@ -173,8 +177,8 @@ void ChzzkDock::buildUi()
 	updateLabel_ = new QLabel(updateBanner_);
 	updateLabel_->setWordWrap(true);
 	updateLabel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-	downloadUpdateButton_ = new QPushButton(QStringLiteral("다운로드"), updateBanner_);
-	skipUpdateButton_ = new QPushButton(QStringLiteral("건너뛰기"), updateBanner_);
+	downloadUpdateButton_ = new QPushButton(localeText("Button.Download"), updateBanner_);
+	skipUpdateButton_ = new QPushButton(localeText("Button.Skip"), updateBanner_);
 	updateLayout_->addWidget(updateLabel_, 1);
 	updateLayout_->addWidget(downloadUpdateButton_);
 	updateLayout_->addWidget(skipUpdateButton_);
@@ -185,13 +189,13 @@ void ChzzkDock::buildUi()
 	formLayout_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
 	auto *titleRow = new QHBoxLayout();
 	titleEdit_ = new QLineEdit(this);
-	titleEdit_->setPlaceholderText(QStringLiteral("방송 제목"));
+	titleEdit_->setPlaceholderText(localeText("Placeholder.Title"));
 	titleCountLabel_ = new QLabel(QStringLiteral("0자"), this);
 	titleCountLabel_->setMinimumWidth(36);
 	titleCountLabel_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 	titleRow->addWidget(titleEdit_, 1);
 	titleRow->addWidget(titleCountLabel_);
-	formLayout_->addRow(QStringLiteral("제목"), titleRow);
+	formLayout_->addRow(localeText("Field.Title"), titleRow);
 
 	auto *categoryRow = new QHBoxLayout();
 	categoryCombo_ = new QComboBox(this);
@@ -201,24 +205,24 @@ void ChzzkDock::buildUi()
 	categoryCombo_->setInsertPolicy(QComboBox::NoInsert);
 	categoryCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
 	categoryCombo_->setMinimumContentsLength(14);
-	categoryEdit_->setPlaceholderText(QStringLiteral("두 글자 이상 검색"));
+	categoryEdit_->setPlaceholderText(localeText("Placeholder.Category"));
 	clearCategoryButton_ = new QPushButton(this);
 	clearCategoryButton_->setIcon(style()->standardIcon(QStyle::SP_DialogResetButton));
-	clearCategoryButton_->setToolTip(QStringLiteral("카테고리 제거"));
+	clearCategoryButton_->setToolTip(localeText("Tooltip.RemoveCategory"));
 	clearCategoryButton_->setFixedWidth(34);
 	categoryRow->addWidget(categoryCombo_, 1);
 	categoryRow->addWidget(clearCategoryButton_);
-	formLayout_->addRow(QStringLiteral("카테고리"), categoryRow);
+	formLayout_->addRow(localeText("Field.Category"), categoryRow);
 
 	auto *tagsColumn = new QVBoxLayout();
 	tagsColumn->setContentsMargins(0, 0, 0, 0);
 	tagsColumn->setSpacing(2);
 	tagsEdit_ = new QLineEdit(this);
-	tagsEdit_->setPlaceholderText(QStringLiteral("쉼표로 구분"));
-	tagsValidationLabel_ = new QLabel(QStringLiteral("태그 없음 · 유효"), this);
+	tagsEdit_->setPlaceholderText(localeText("Placeholder.Tags"));
+	tagsValidationLabel_ = new QLabel(localeText("Validation.NoTags"), this);
 	tagsColumn->addWidget(tagsEdit_);
 	tagsColumn->addWidget(tagsValidationLabel_);
-	formLayout_->addRow(QStringLiteral("태그"), tagsColumn);
+	formLayout_->addRow(localeText("Field.Tags"), tagsColumn);
 	root->addLayout(formLayout_);
 
 	changeLabel_ = new QLabel(this);
@@ -232,9 +236,9 @@ void ChzzkDock::buildUi()
 
 	root->addStretch(1);
 	actionLayout_ = new QHBoxLayout();
-	refreshButton_ = new QPushButton(QStringLiteral("새로고침"), this);
+	refreshButton_ = new QPushButton(localeText("Button.Refresh"), this);
 	refreshButton_->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
-	applyButton_ = new QPushButton(QStringLiteral("적용"), this);
+	applyButton_ = new QPushButton(localeText("Button.Apply"), this);
 	applyButton_->setDefault(true);
 	actionLayout_->addWidget(refreshButton_);
 	actionLayout_->addWidget(applyButton_);
@@ -250,10 +254,10 @@ void ChzzkDock::buildUi()
 void ChzzkDock::updateLoginState(bool loggedIn)
 {
 	loggedIn_ = loggedIn;
-	statusLabel_->setText(updateRequired_                       ? QStringLiteral("업데이트 필요")
-			      : loggedIn && !channelName_.isEmpty() ? QStringLiteral("채널: %1").arg(channelName_)
-			      : loggedIn                            ? QStringLiteral("치지직 연결됨")
-								    : QStringLiteral("로그인 필요"));
+	statusLabel_->setText(updateRequired_ ? localeText("Status.UpdateRequired")
+			      : loggedIn && !channelName_.isEmpty()
+					? localeText("Status.Channel").arg(channelName_)
+			      : loggedIn ? localeText("Status.Connected") : localeText("Status.LoginRequired"));
 	loginButton_->setVisible(!loggedIn);
 	logoutButton_->setVisible(loggedIn);
 	diagnosticsButton_->setEnabled(!busy_);
@@ -291,7 +295,8 @@ void ChzzkDock::updateControls()
 	refreshButton_->setEnabled(canEdit);
 	bool validTags = false;
 	validatedTags(validTags);
-	applyButton_->setEnabled(canEdit && !titleEdit_->text().trimmed().isEmpty() && validTags);
+	applyButton_->setEnabled(canEdit && hasCurrentSettings_ && hasUnsavedChanges() &&
+				 !titleEdit_->text().trimmed().isEmpty() && validTags);
 }
 
 void ChzzkDock::scheduleCategorySearch()
@@ -352,6 +357,16 @@ void ChzzkDock::resizeEvent(QResizeEvent *event)
 	updateResponsiveLayout();
 }
 
+void ChzzkDock::closeEvent(QCloseEvent *event)
+{
+	if (event->spontaneous() && !QCoreApplication::closingDown() &&
+	    !confirmDiscardChanges(QStringLiteral("도크 닫기"))) {
+		event->ignore();
+		return;
+	}
+	QWidget::closeEvent(event);
+}
+
 void ChzzkDock::updateResponsiveLayout()
 {
 	if (!accountLayout_ || !noticeLayout_ || !updateLayout_ || !actionLayout_ || !formLayout_)
@@ -397,30 +412,17 @@ void ChzzkDock::showCategories(const QString &query, const QVector<ChzzkCategory
 
 QStringList ChzzkDock::validatedTags(bool &valid) const
 {
-	valid = true;
-	QStringList tags;
-	const QRegularExpression allowed(QStringLiteral("^[\\p{L}\\p{N}]+$"),
-					 QRegularExpression::UseUnicodePropertiesOption);
-	for (QString tag : tagsEdit_->text().split(',', Qt::SkipEmptyParts)) {
-		tag = tag.trimmed();
-		if (!allowed.match(tag).hasMatch()) {
-			valid = false;
-			return {};
-		}
-		if (!tags.contains(tag))
-			tags.append(tag);
-	}
-	return tags;
+	return SettingsUtils::validatedTags(tagsEdit_->text(), valid);
 }
 
 void ChzzkDock::updateInputStatus()
 {
-	titleCountLabel_->setText(QStringLiteral("%1자").arg(graphemeCount(titleEdit_->text())));
+	titleCountLabel_->setText(QStringLiteral("%1자").arg(SettingsUtils::graphemeCount(titleEdit_->text())));
 	bool valid = false;
 	const QStringList tags = validatedTags(valid);
-	tagsValidationLabel_->setText(valid ? (tags.isEmpty() ? QStringLiteral("태그 없음 · 유효")
-							      : QStringLiteral("태그 %1개 · 유효").arg(tags.size()))
-					    : QStringLiteral("공백·특수문자는 사용할 수 없습니다."));
+	tagsValidationLabel_->setText(valid ? (tags.isEmpty() ? localeText("Validation.NoTags")
+							      : localeText("Validation.TagCount").arg(tags.size()))
+					    : localeText("Validation.InvalidTags"));
 	tagsValidationLabel_->setStyleSheet(valid ? QString() : QStringLiteral("color: #d94b4b;"));
 	updateChangeSummary();
 	updateControls();
@@ -445,7 +447,7 @@ QString ChzzkDock::changeSummary(const BroadcastSettings &settings, bool removeC
 						  .arg(display(currentSettings_.categoryName), display(categoryName))
 					: QStringLiteral("카테고리"));
 	}
-	if (!sameTags(settings.tags, currentSettings_.tags))
+	if (!SettingsUtils::sameTags(settings.tags, currentSettings_.tags))
 		changes.append(detailed ? QStringLiteral("태그: %1 → %2")
 						  .arg(display(currentSettings_.tags.join(QStringLiteral(", "))),
 						       display(settings.tags.join(QStringLiteral(", "))))
@@ -456,15 +458,31 @@ QString ChzzkDock::changeSummary(const BroadcastSettings &settings, bool removeC
 bool ChzzkDock::settingsMatch(const BroadcastSettings &expected, bool removeCategory,
 			      const BroadcastSettings &actual) const
 {
-	return expected.title == actual.title && effectiveCategoryId(expected, removeCategory) == actual.categoryId &&
-	       sameTags(expected.tags, actual.tags);
+	return SettingsUtils::settingsMatch(currentSettings_, expected, removeCategory, actual);
 }
 
 QString ChzzkDock::effectiveCategoryId(const BroadcastSettings &settings, bool removeCategory) const
 {
-	if (removeCategory)
-		return {};
-	return settings.categoryId.isEmpty() ? currentSettings_.categoryId : settings.categoryId;
+	return SettingsUtils::effectiveCategoryId(currentSettings_, settings, removeCategory);
+}
+
+bool ChzzkDock::hasUnsavedChanges() const
+{
+	if (!hasCurrentSettings_)
+		return false;
+	bool validTags = false;
+	const BroadcastSettings edited = editedSettings(validTags);
+	return validTags && !changeSummary(edited, removeCategory_, false).isEmpty();
+}
+
+bool ChzzkDock::confirmDiscardChanges(const QString &action)
+{
+	if (!hasUnsavedChanges())
+		return true;
+	return QMessageBox::warning(this, QStringLiteral("저장하지 않은 변경 사항"),
+				    QStringLiteral("수정한 방송 정보가 아직 적용되지 않았습니다. %1할까요?").arg(action),
+				    QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) ==
+	       QMessageBox::Discard;
 }
 
 BroadcastSettings ChzzkDock::editedSettings(bool &validTags) const
@@ -487,8 +505,7 @@ void ChzzkDock::updateChangeSummary()
 	bool validTags = false;
 	const BroadcastSettings edited = editedSettings(validTags);
 	const QString summary = validTags ? changeSummary(edited, removeCategory_, false) : QString();
-	changeLabel_->setText(summary.isEmpty() ? QStringLiteral("변경 사항 없음")
-						: QStringLiteral("변경 예정: %1").arg(summary));
+	changeLabel_->setText(summary.isEmpty() ? localeText("Changes.None") : localeText("Changes.Pending").arg(summary));
 }
 
 void ChzzkDock::applyChanges()
@@ -579,7 +596,7 @@ void ChzzkDock::showUpdate(const UpdateInfo &info)
 	if (!info.blocksUse() || promptedUpdateVersion_ == info.latestVersion)
 		return;
 	promptedUpdateVersion_ = info.latestVersion;
-	statusLabel_->setText(QStringLiteral("업데이트 필요"));
+	statusLabel_->setText(localeText("Status.UpdateRequired"));
 	const QString title = info.level == UpdateLevel::Security ? QStringLiteral("보안 업데이트 필요")
 								  : QStringLiteral("필수 업데이트 필요");
 	const QString detail =

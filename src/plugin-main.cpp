@@ -4,6 +4,8 @@
 #include <obs-module.h>
 #include <plugin-support.h>
 
+#include <QCoreApplication>
+#include <QFileInfo>
 #include <QPointer>
 
 OBS_DECLARE_MODULE()
@@ -22,6 +24,12 @@ const char *obs_module_description(void)
 
 bool obs_module_load(void)
 {
+	// OBS 33+ loads third-party plugins from ProgramData. Keep the bundled Qt TLS
+	// backend relative to the module instead of modifying the OBS installation.
+	const char *binaryPath = obs_get_module_binary_path(obs_current_module());
+	if (binaryPath && *binaryPath)
+		QCoreApplication::addLibraryPath(QFileInfo(QString::fromUtf8(binaryPath)).absolutePath());
+
 	g_dock = new ChzzkDock();
 	if (!obs_frontend_add_dock_by_id(kDockId, obs_module_text("Dock.Title"), g_dock)) {
 		delete g_dock;

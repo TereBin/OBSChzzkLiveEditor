@@ -1,4 +1,5 @@
 #include "update-checker.hpp"
+#include "update-utils.hpp"
 
 #include <obs-module.h>
 #include <plugin-support.h>
@@ -11,7 +12,6 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSettings>
-#include <QVersionNumber>
 
 namespace {
 constexpr auto kManifestUrl =
@@ -70,15 +70,19 @@ void UpdateChecker::checkForUpdates(bool force)
 	connect(reply, &QNetworkReply::finished, this, [this, reply]() {
 		const QByteArray body = reply->readAll();
 		const bool succeeded = reply->error() == QNetworkReply::NoError;
+		const QString error = reply->errorString();
 		reply->deleteLater();
-		if (!succeeded)
+		if (!succeeded) {
+			emit checkCompleted(QStringLiteral("업데이트 서버 연결 실패: %1").arg(error), false);
 			return;
+		}
 
 		QSettings settings(settingsPath(), QSettings::IniFormat);
 		QDir().mkpath(QFileInfo(settings.fileName()).absolutePath());
 		settings.setValue(QStringLiteral("updates/lastCheckedAt"), QDateTime::currentSecsSinceEpoch());
 		settings.setValue(QStringLiteral("updates/lastCheckedVersion"), QString::fromUtf8(PLUGIN_VERSION));
 		handleManifest(body);
+		emit checkCompleted(QStringLiteral("업데이트 서버 연결이 정상입니다."), true);
 	});
 }
 
@@ -135,12 +139,10 @@ void UpdateChecker::handleManifest(const QByteArray &body)
 	info.releaseUrl = QUrl(object.value(QStringLiteral("releaseUrl")).toString());
 	info.level = updateLevelFrom(object.value(QStringLiteral("level")).toString().toLower());
 
-	const QVersionNumber current = QVersionNumber::fromString(QString::fromUtf8(PLUGIN_VERSION));
-	const QVersionNumber latest = QVersionNumber::fromString(info.latestVersion);
-	const QVersionNumber minimum = QVersionNumber::fromString(info.minimumVersion);
-	if (current.isNull() || latest.isNull() || QVersionNumber::compare(current, latest) >= 0)
+	const QString currentVersion = QString::fromUtf8(PLUGIN_VERSION);
+	if (!UpdateUtils::isNewerVersion(currentVersion, info.latestVersion))
 		return;
-	if (!minimum.isNull() && QVersionNumber::compare(current, minimum) < 0 && !info.blocksUse())
+	if (UpdateUtils::isBelowMinimum(currentVersion, info.minimumVersion) && !info.blocksUse())
 		info.level = UpdateLevel::Required;
 	if (!isValidReleaseUrl(info.releaseUrl))
 		info.releaseUrl = QUrl(QString::fromUtf8(kDefaultReleaseUrl));

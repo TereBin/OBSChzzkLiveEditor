@@ -13,6 +13,7 @@ class QLabel;
 class QPushButton;
 class QTimer;
 class QResizeEvent;
+class QCloseEvent;
 
 class CategoryLineEdit final : public QLineEdit {
 	Q_OBJECT
@@ -52,6 +53,7 @@ private slots:
 
 private:
 	void resizeEvent(QResizeEvent *event) override;
+	void closeEvent(QCloseEvent *event) override;
 	void buildUi();
 	void connectUi();
 	void updateResponsiveLayout();
@@ -67,6 +69,8 @@ private:
 			   const BroadcastSettings &actual) const;
 	void openUpdatePage();
 	QStringList validatedTags(bool &valid) const;
+	bool hasUnsavedChanges() const;
+	bool confirmDiscardChanges(const QString &action);
 
 	ChzzkApiClient client_;
 	UpdateChecker updateChecker_;

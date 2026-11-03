@@ -57,6 +57,8 @@ private:
 	void ensureAccessToken(TokenCallback callback);
 	void forceRefreshAccessToken(TokenCallback callback);
 	bool retryInvalidToken(const QJsonObject &response, QNetworkReply *reply, bool retried, RetryCallback callback);
+	bool retryRateLimited(QNetworkReply *reply, bool retried, RetryCallback callback);
+	bool retryRecoverable(const QJsonObject &response, QNetworkReply *reply, bool retried, RetryCallback callback);
 	void refreshAccessToken();
 	void finishTokenRequest(QNetworkReply *reply);
 	bool saveTokens(const QJsonObject &object);
