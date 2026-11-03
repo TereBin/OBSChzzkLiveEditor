@@ -1,12 +1,13 @@
 #include "network-error.hpp"
 
-QString friendlyNetworkError(QNetworkReply::NetworkError networkError, int httpStatus,
-			     const QString &serverMessage, const QString &fallback)
+QString friendlyNetworkError(QNetworkReply::NetworkError networkError, int httpStatus, const QString &serverMessage,
+			     const QString &fallback)
 {
 	if (httpStatus == 429)
 		return QStringLiteral("요청이 너무 많아 서버가 잠시 제한했습니다. 잠시 후 다시 시도해 주세요.");
 	if (httpStatus >= 500)
-		return QStringLiteral("치지직 또는 중계 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
+		return QStringLiteral(
+			"치지직 또는 중계 서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요.");
 	if (!serverMessage.isEmpty())
 		return serverMessage;
 

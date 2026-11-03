@@ -142,8 +142,8 @@ QJsonObject ChzzkApiClient::responseObject(QNetworkReply *reply, QString &error)
 	}
 	if (reply->error() != QNetworkReply::NoError) {
 		const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-		error = friendlyNetworkError(reply->error(), status,
-					     object.value(QStringLiteral("message")).toString(), reply->errorString());
+		error = friendlyNetworkError(reply->error(), status, object.value(QStringLiteral("message")).toString(),
+					     reply->errorString());
 		return object;
 	}
 	if (parseError.error != QJsonParseError::NoError && !body.trimmed().isEmpty())
@@ -356,8 +356,9 @@ void ChzzkApiClient::loadUserProfileInternal(bool retried)
 		connect(reply, &QNetworkReply::finished, this, [this, reply, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() && retryRecoverable(
-				response, reply, retried, [this]() { loadUserProfileInternal(true); });
+			const bool retry = !error.isEmpty() && retryRecoverable(response, reply, retried, [this]() {
+				loadUserProfileInternal(true);
+			});
 			reply->deleteLater();
 			if (retry)
 				return;
@@ -380,9 +381,10 @@ void ChzzkApiClient::loadSettingsInternal(bool afterApply, bool retried)
 		connect(reply, &QNetworkReply::finished, this, [this, reply, afterApply, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() && retryRecoverable(response, reply, retried, [this, afterApply]() {
-				loadSettingsInternal(afterApply, true);
-			});
+			const bool retry = !error.isEmpty() &&
+					   retryRecoverable(response, reply, retried, [this, afterApply]() {
+						   loadSettingsInternal(afterApply, true);
+					   });
 			reply->deleteLater();
 			endOperation();
 			if (retry)
@@ -429,8 +431,9 @@ void ChzzkApiClient::diagnoseAuthenticatedConnection(bool retried)
 		connect(reply, &QNetworkReply::finished, this, [this, reply, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() && retryRecoverable(
-				response, reply, retried, [this]() { diagnoseAuthenticatedConnection(true); });
+			const bool retry = !error.isEmpty() && retryRecoverable(response, reply, retried, [this]() {
+				diagnoseAuthenticatedConnection(true);
+			});
 			reply->deleteLater();
 			endOperation();
 			if (retry)
@@ -509,10 +512,11 @@ void ChzzkApiClient::updateSettingsInternal(const BroadcastSettings &settings, b
 		connect(reply, &QNetworkReply::finished, this, [this, reply, settings, removeCategory, retried]() {
 			QString error;
 			const QJsonObject response = responseObject(reply, error);
-			const bool retry = !error.isEmpty() &&
-					   retryRecoverable(response, reply, retried, [this, settings, removeCategory]() {
-						   updateSettingsInternal(settings, removeCategory, true);
-					   });
+			const bool retry =
+				!error.isEmpty() &&
+				retryRecoverable(response, reply, retried, [this, settings, removeCategory]() {
+					updateSettingsInternal(settings, removeCategory, true);
+				});
 			reply->deleteLater();
 			endOperation();
 			if (retry)

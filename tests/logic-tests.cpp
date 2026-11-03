@@ -23,7 +23,8 @@ int main(int argc, char **argv)
 	BroadcastSettings actual{QStringLiteral("새 제목"), {}, QStringLiteral("old"), {}, {QStringLiteral("b")}};
 	assert(SettingsUtils::settingsMatch(current, expected, false, actual));
 	assert(friendlyNetworkError(QNetworkReply::TimeoutError, 0, {}, {}).contains(QStringLiteral("초과")));
-	assert(friendlyNetworkError(QNetworkReply::UnknownNetworkError, 429, {}, {}).contains(QStringLiteral("너무 많")));
+	assert(friendlyNetworkError(QNetworkReply::UnknownNetworkError, 429, {}, {})
+		       .contains(QStringLiteral("너무 많")));
 	assert(UpdateUtils::isNewerVersion(QStringLiteral("0.4.0"), QStringLiteral("0.10.0")));
 	assert(!UpdateUtils::isNewerVersion(QStringLiteral("0.4.0"), QStringLiteral("0.4.0")));
 	assert(UpdateUtils::isBelowMinimum(QStringLiteral("0.3.6"), QStringLiteral("0.4.0")));

@@ -254,10 +254,10 @@ void ChzzkDock::buildUi()
 void ChzzkDock::updateLoginState(bool loggedIn)
 {
 	loggedIn_ = loggedIn;
-	statusLabel_->setText(updateRequired_ ? localeText("Status.UpdateRequired")
-			      : loggedIn && !channelName_.isEmpty()
-					? localeText("Status.Channel").arg(channelName_)
-			      : loggedIn ? localeText("Status.Connected") : localeText("Status.LoginRequired"));
+	statusLabel_->setText(updateRequired_                       ? localeText("Status.UpdateRequired")
+			      : loggedIn && !channelName_.isEmpty() ? localeText("Status.Channel").arg(channelName_)
+			      : loggedIn                            ? localeText("Status.Connected")
+								    : localeText("Status.LoginRequired"));
 	loginButton_->setVisible(!loggedIn);
 	logoutButton_->setVisible(loggedIn);
 	diagnosticsButton_->setEnabled(!busy_);
@@ -479,10 +479,10 @@ bool ChzzkDock::confirmDiscardChanges(const QString &action)
 {
 	if (!hasUnsavedChanges())
 		return true;
-	return QMessageBox::warning(this, QStringLiteral("저장하지 않은 변경 사항"),
-				    QStringLiteral("수정한 방송 정보가 아직 적용되지 않았습니다. %1할까요?").arg(action),
-				    QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) ==
-	       QMessageBox::Discard;
+	return QMessageBox::warning(
+		       this, QStringLiteral("저장하지 않은 변경 사항"),
+		       QStringLiteral("수정한 방송 정보가 아직 적용되지 않았습니다. %1할까요?").arg(action),
+		       QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Discard;
 }
 
 BroadcastSettings ChzzkDock::editedSettings(bool &validTags) const
@@ -505,7 +505,8 @@ void ChzzkDock::updateChangeSummary()
 	bool validTags = false;
 	const BroadcastSettings edited = editedSettings(validTags);
 	const QString summary = validTags ? changeSummary(edited, removeCategory_, false) : QString();
-	changeLabel_->setText(summary.isEmpty() ? localeText("Changes.None") : localeText("Changes.Pending").arg(summary));
+	changeLabel_->setText(summary.isEmpty() ? localeText("Changes.None")
+						: localeText("Changes.Pending").arg(summary));
 }
 
 void ChzzkDock::applyChanges()
